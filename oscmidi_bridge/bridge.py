@@ -65,7 +65,7 @@ class Bridge:
         if not self.config:
             return 0.0
         try:
-            return max(f.stat().st_mtime for f in self.config.parent.glob("*.map"))
+            return max(f.stat().st_mtime for f in self.config.parent.glob("*.txt"))
         except ValueError:
             return 0.0
 

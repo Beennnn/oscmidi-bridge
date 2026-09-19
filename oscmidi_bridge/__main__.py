@@ -1,4 +1,4 @@
-"""Point d'entrée : `python3 -m oscmidi_bridge [fichier.map] [--verify]`.
+"""Point d'entrée : `python3 -m oscmidi_bridge [fichier.txt] [--verify]`.
 
 `--verify` charge la configuration, affiche ce qu'elle déclare et sort — à passer
 AVANT le concert plutôt que de découvrir une faute de frappe sur scène.
@@ -16,6 +16,19 @@ from .ports import inscrire_ports
 RACINE = Path(__file__).resolve().parent.parent
 
 
+def _config_par_defaut() -> Path:
+    """Où trouver la configuration, dans l'ordre.
+
+    Elle ne vit PAS dans ce dépôt : elle décrit un rig précis — numéros de CC,
+    index de pistes, ports — alors que le moteur, lui, est public et générique.
+    """
+    import os
+    if os.environ.get("OSCMIDI_CONFIG"):
+        return Path(os.environ["OSCMIDI_CONFIG"]).expanduser()
+    rig = Path.home() / "dev/music/rig-config/oscmidi/common.txt"
+    return rig if rig.exists() else RACINE / "examples" / "common.txt"
+
+
 def journal(*a):
     print(*a, flush=True)   # launchd redirige stdout vers le fichier de log
 
@@ -24,7 +37,7 @@ def main(argv: list[str]) -> int:
     args = [a for a in argv[1:] if not a.startswith("--")]
     verify = "--verify" in argv
     ports = "--ports" in argv
-    chemin = Path(args[0]) if args else RACINE / "config" / "common.map"
+    chemin = Path(args[0]) if args else _config_par_defaut()
     if not chemin.exists():
         journal(f"configuration introuvable : {chemin}")
         return 2

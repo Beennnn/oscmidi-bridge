@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère `config/catalogue.map` : TOUTES les adresses d'AbletonOSC, commentées.
+"""Génère `config/catalogue.txt` : TOUTES les adresses d'AbletonOSC, commentées.
 
 Le principe : on n'écrit plus une ligne de configuration, on en **décommente** une.
 Chaque adresse exposée par l'AbletonOSC installé apparaît avec un numéro de CC déjà
@@ -23,7 +23,7 @@ ABLETONOSC = Path.home() / "Music/Ableton/User Library/Remote Scripts/AbletonOSC
 BASES = {"song.py": "song", "track.py": "track", "clip.py": "clip", "device.py": "device",
          "clip_slot.py": "clip_slot", "scene.py": "scene", "view.py": "view",
          "application.py": "application"}
-# Numéros déjà pris par common.map sur le canal 16 — on ne les réattribue pas.
+# Numéros déjà pris par common.txt sur le canal 16 — on ne les réattribue pas.
 PRIS_16 = set(range(20, 50)) | set(range(60, 96)) | set(range(100, 110))
 ORDRE = ["song", "view", "scene", "track", "clip", "clip_slot", "device", "application"]
 
@@ -43,6 +43,14 @@ def adresses() -> set[str]:
                     if cle == "properties_rw":
                         out.add(f"/live/{base}/set/{p}")
     return out
+
+
+def _sortie() -> Path:
+    """Ou ecrire : la configuration du rig vit dans un depot PRIVE, pas ici."""
+    import os
+    base = Path(os.environ.get("OSCMIDI_CONFIG_DIR",
+                               Path.home() / "dev/music/rig-config/oscmidi"))
+    return base / "catalogue.txt" if base.exists() else Path("examples") / "catalogue.txt"
 
 
 def main() -> int:
@@ -96,8 +104,8 @@ target  127.0.0.1:11000 -> 11001
                 continue                      # géré automatiquement par les `watch`
             else:
                 lignes.append(f"# send  cc {ch}{num:<3} {a} {index}".rstrip())
-    Path("config/catalogue.map").write_text("\n".join(lignes) + "\n", encoding="utf-8")
-    print(f"config/catalogue.map : {len(adr)} adresses, "
+    _sortie().write_text("\n".join(lignes) + "\n", encoding="utf-8")
+    print(f"{_sortie()} : {len(adr)} adresses, "
           f"{sum(1 for l in lignes if l.startswith('# send') or l.startswith('# watch'))} lignes prêtes à décommenter")
     return 0
 
