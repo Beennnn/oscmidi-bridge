@@ -44,6 +44,7 @@ class Bridge:
         self._watches: dict[str, list] = {}
         for w in m.watches:
             self._watches.setdefault(w.address, []).append(w)
+        self._dernier: dict[int, float] = {}   # debit des watch limites
         self._texts: dict[str, list] = {}
         for t in m.texts:
             self._texts.setdefault(t.address, []).append(t)
@@ -119,6 +120,15 @@ class Bridge:
                 "playing": self.state.get("_playing"), "tempo": self.state.get("_tempo")}
 
     def _emettre_cc(self, w, valeur: float):
+        if w.every_ms:
+            # Limitation de débit : un VU-mètre envoie des dizaines de messages par
+            # seconde et le deck ne sait pas se redessiner aussi vite. On laisse
+            # tomber les valeurs intermédiaires plutôt que d'engorger le MIDI.
+            maintenant = time.time() * 1000
+            precedent = self._dernier.get(id(w), 0)
+            if maintenant - precedent < w.every_ms:
+                return
+            self._dernier[id(w)] = maintenant
         v = int(round(valeur))
         if not 0 <= v <= 127:
             # Le MIDI est en 7 bits : on le DIT plutôt que de tronquer en silence.

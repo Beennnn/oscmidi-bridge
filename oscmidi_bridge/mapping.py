@@ -16,6 +16,7 @@ entières quand on posait un commentaire au mauvais endroit.
     send  cc 13 20            /live/song/start_playing
     send  cc 13 24  $v+50     /live/song/set/tempo $a.0
     watch /live/song/get/is_playing   0  ->  cc 13 100
+    watch /live/track/get/output_meter_level 0 -> cc 110  every 120ms
     text  /live/song/get/track_names       ->  tracks
 """
 
@@ -102,6 +103,10 @@ class Watch:
     channel: int
     number: int
     transfo: Any = field(default=None)
+    # Débit minimal entre deux émissions, en millisecondes. Indispensable pour les
+    # VU-mètres : c'est exactement ce qui a saturé le CPU du plugin MIDI le 13/09
+    # (redessin à chaque message reçu) et qu'un intervalle de 120 ms avait réglé.
+    every_ms: int = 0
     source: str = ""
 
 
@@ -207,8 +212,17 @@ def load(path: Path, _vus: set[Path] | None = None) -> Mapping:
                     canal = m.channel if impl else int(suite[1])
                     num = int(suite[1]) if impl else int(suite[2])
                     reste_w = suite[2:] if impl else suite[3:]
-                    tr = parse_transfo(reste_w[0]) if reste_w else None
-                    m.watches.append(Watch(adresse, rang, kind, canal, num, tr, ou))
+                    tr = None; every = 0
+                    for tok in reste_w:
+                        if tok.startswith("$v"):
+                            tr = parse_transfo(tok)
+                        elif tok == "every":
+                            continue
+                        elif tok.rstrip("ms").isdigit():
+                            every = int(tok.rstrip("ms"))
+                        else:
+                            raise ValueError(f"jeton inattendu apres le watch : {tok!r}")
+                    m.watches.append(Watch(adresse, rang, kind, canal, num, tr, every, ou))
                 case "text":
                     i = mots.index("->")
                     m.texts.append(Text(mots[1], mots[i + 1], ou))
