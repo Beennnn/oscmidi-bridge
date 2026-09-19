@@ -129,6 +129,10 @@ class Mapping:
     host: str = "127.0.0.1"
     send_port: int = 11000
     recv_port: int = 11001
+    # Ports a qui REDIFFUSER les reponses de Live. AbletonOSC force le port de
+    # reponse a 11001 (il ne repond PAS au port source), donc un seul processus
+    # peut les recevoir. La passerelle le detient et relaie aux autres clients.
+    fanout: list = field(default_factory=list)
     sends: list[Send] = field(default_factory=list)
     verbs: list[Verb] = field(default_factory=list)
     watches: list[Watch] = field(default_factory=list)
@@ -163,6 +167,7 @@ def load(path: Path, _vus: set[Path] | None = None) -> Mapping:
                     m.verbs += sous.verbs
                     m.watches += sous.watches
                     m.texts += sous.texts
+                    m.fanout += sous.fanout
                 case "port":
                     # le nom peut contenir des espaces : tout ce qui suit le mot-clé
                     m.port = " ".join(mots[1:]).strip('"')
@@ -171,6 +176,9 @@ def load(path: Path, _vus: set[Path] | None = None) -> Mapping:
                     if not 1 <= c <= 16:
                         raise ValueError("canal MIDI hors 1-16")
                     m.channel = c
+                case "fanout":
+                    h, _, po = " ".join(mots[1:]).partition(":")
+                    m.fanout.append((h.strip(), int(po)))
                 case "target":
                     c = _CIBLE.match(" ".join(mots[1:]))
                     if not c:

@@ -264,6 +264,15 @@ class Bridge:
                 time.sleep(1)
                 continue
             if data:
+                # Redistribution : AbletonOSC force ses reponses sur 11001 et ne
+                # repond pas au port source, donc un seul processus peut les lire.
+                # La passerelle le detient — c'est elle qui sert le concert — et
+                # relaie aux autres clients (le serveur MCP, un moniteur...).
+                for cible in self.m.fanout:
+                    try:
+                        self.sock.sendto(data, cible)
+                    except OSError:
+                        pass          # un client absent ne doit rien interrompre
                 msg = osc.decode(data)
                 if msg:
                     self._sur_osc(*msg)

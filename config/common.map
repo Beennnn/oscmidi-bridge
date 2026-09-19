@@ -150,3 +150,11 @@ verb  cc 95   mute.kill
 #   le NAVIGATEUR de Live — charger un instrument ou un plugin depuis le deck.
 #   C'est la seule fonction d'ActionStation et de HJF_Plugins qui n'a pas
 #   d'équivalent OSC dans la version officielle.
+
+
+# ══ REDISTRIBUTION DES REPONSES ════════════════════════════════════════════
+# AbletonOSC force son port de reponse a 11001 et ne repond PAS au port source :
+# un seul processus peut donc recevoir l'etat de Live. La passerelle le detient —
+# c'est elle qui sert le concert — et le relaie aux autres clients.
+# Ici : le serveur MCP ableton-osc-mcp, lance avec ABLETON_OSC_CLIENT_PORT=11101.
+fanout  127.0.0.1:11101
