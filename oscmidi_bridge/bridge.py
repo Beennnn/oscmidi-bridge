@@ -19,6 +19,7 @@ import rtmidi
 
 from . import osc
 from .mapping import Mapping
+from .verbs import VERBES
 
 # Port MIDI par défaut : celui que le Stream Deck utilise DÉJÀ.
 #
@@ -39,6 +40,7 @@ class Bridge:
         self._stop = threading.Event()
         # index des correspondances, pour ne pas balayer les listes à chaque message
         self._sends = {(s.kind, s.channel, s.number): s for s in m.sends}
+        self._verbs = {(v.kind, v.channel, v.number): v for v in m.verbs}
         self._watches: dict[str, list] = {}
         for w in m.watches:
             self._watches.setdefault(w.address, []).append(w)
@@ -81,7 +83,14 @@ class Bridge:
         if kind is None:
             return
         canal = (statut & 0x0F) + 1
-        s = self._sends.get((kind, canal, d1))
+        cle = (kind, canal, d1)
+        v = self._verbs.get(cle)
+        if v is not None:
+            # Un geste : il calcule sur l'état observé et rend plusieurs messages.
+            for adresse, args in VERBES[v.name](self._etat(), d2):
+                self._envoyer(adresse, args)
+            return
+        s = self._sends.get(cle)
         if s is None:
             return
         val = s.transfo(d2) if s.transfo else d2
@@ -95,10 +104,19 @@ class Bridge:
                 "$track": int(self.state.get("_track", 0)),
                 "$scene": int(self.state.get("_scene", 0))}
         args = [subs.get(a, a) if isinstance(a, str) else a for a in s.args]
+        self._envoyer(s.address, args)
+
+    def _envoyer(self, adresse: str, args: list):
         try:
-            self.sock.sendto(osc.encode(s.address, args), (self.m.host, self.m.send_port))
+            self.sock.sendto(osc.encode(adresse, args), (self.m.host, self.m.send_port))
         except Exception as e:
-            self.log(f"envoi OSC {s.address} : {e}")
+            self.log(f"envoi OSC {adresse} : {e}")
+
+    def _etat(self) -> dict:
+        """L'état que les gestes consultent — jamais lu ailleurs que par eux."""
+        return {"scene": self.state.get("_scene", 0), "track": self.state.get("_track", 0),
+                "scenes": self.state.get("_scenes"), "tracks": self.state.get("_tracks"),
+                "playing": self.state.get("_playing"), "tempo": self.state.get("_tempo")}
 
     def _emettre_cc(self, w, valeur: float):
         v = int(round(valeur))
@@ -124,7 +142,11 @@ class Bridge:
         jusqu'au premier changement — et une touche allumée à tort est pire qu'une
         touche éteinte.
         """
-        essentiels = ["/live/view/get/selected_track", "/live/view/get/selected_scene"]
+        # Ces six-là sont observés QUOI QU'IL ARRIVE : ce sont eux qui rendent les
+        # gestes calculables, même si la configuration ne les renvoie pas en MIDI.
+        essentiels = ["/live/view/get/selected_track", "/live/view/get/selected_scene",
+                      "/live/song/get/num_scenes", "/live/song/get/num_tracks",
+                      "/live/song/get/is_playing", "/live/song/get/tempo"]
         for adresse in list(dict.fromkeys(list(self._watches) + list(self._texts) + essentiels)):
             # /live/song/get/tempo  ->  /live/song/start_listen/tempo
             ecoute = adresse.replace("/get/", "/start_listen/")
@@ -139,6 +161,14 @@ class Bridge:
             self.state["_track"] = args[0]
         elif adresse == "/live/view/get/selected_scene" and args:
             self.state["_scene"] = args[0]
+        elif adresse == "/live/song/get/num_scenes" and args:
+            self.state["_scenes"] = args[0]
+        elif adresse == "/live/song/get/num_tracks" and args:
+            self.state["_tracks"] = args[0]
+        elif adresse == "/live/song/get/is_playing" and args:
+            self.state["_playing"] = args[0]
+        elif adresse == "/live/song/get/tempo" and args:
+            self.state["_tempo"] = args[0]
         for w in self._watches.get(adresse, []):
             if w.arg < len(args):
                 v = args[w.arg]

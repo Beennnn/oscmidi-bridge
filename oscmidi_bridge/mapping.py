@@ -84,6 +84,16 @@ class Send:
 
 
 @dataclass
+class Verb:
+    """MIDI entrant → un GESTE, c'est-à-dire plusieurs messages calculés sur l'état."""
+    kind: str
+    channel: int
+    number: int
+    name: str
+    source: str = ""
+
+
+@dataclass
 class Watch:
     """Réponse OSC → CC sortant."""
     address: str
@@ -110,6 +120,7 @@ class Mapping:
     send_port: int = 11000
     recv_port: int = 11001
     sends: list[Send] = field(default_factory=list)
+    verbs: list[Verb] = field(default_factory=list)
     watches: list[Watch] = field(default_factory=list)
     texts: list[Text] = field(default_factory=list)
 
@@ -139,6 +150,7 @@ def load(path: Path, _vus: set[Path] | None = None) -> Mapping:
                 case "include":
                     sous = load(p.parent / mots[1], vus)
                     m.sends += sous.sends
+                    m.verbs += sous.verbs
                     m.watches += sous.watches
                     m.texts += sous.texts
                 case "target":
@@ -156,6 +168,13 @@ def load(path: Path, _vus: set[Path] | None = None) -> Mapping:
                         reste = reste[1:]
                     m.sends.append(Send(kind, canal, num, reste[0],
                                         [literal(t) for t in reste[1:]], tr, ou))
+                case "verb":
+                    # verb <cc|note> <canal> <numero> <nom du geste>
+                    from .verbs import VERBES
+                    nom = mots[4]
+                    if nom not in VERBES:
+                        raise ValueError(f"geste inconnu : {nom!r} — connus : {', '.join(sorted(VERBES))}")
+                    m.verbs.append(Verb(mots[1], int(mots[2]), int(mots[3]), nom, ou))
                 case "watch":
                     # watch <adresse> <rang arg> -> <cc|note> <canal> <numero> [transfo]
                     i = mots.index("->")

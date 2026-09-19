@@ -61,6 +61,22 @@ TABLE: dict[str, tuple[str, list[str]]] = {
     "device_on_off":     ("/live/device/set/parameter/value", ["$track", 0, 0, "$a"]),
 }
 
+# Les GESTES : pas une adresse mais un calcul sur l'état observé (voir verbs.py).
+GESTES = {
+    "prev_scene": "scene.prev", "next_scene": "scene.next",
+    "first_scene": "scene.first", "last_scene": "scene.last",
+    "scroll_scenes": "scene.scroll",
+    "play_next_scene": "scene.play_next", "play_prev_scene": "scene.play_prev",
+    "prev_track": "track.prev", "next_track": "track.next",
+    "first_track": "track.first", "last_track": "track.last",
+    "scroll_tracks": "track.scroll",
+    "play_stop": "transport.toggle", "play_pause": "transport.pause",
+    "tempo_increase": "tempo.up", "tempo_decrease": "tempo.down",
+    "arm_exclusive": "arm.exclusive", "solo_exclusive": "solo.exclusive",
+    "mute_exclusive": "mute.exclusive",
+    "arm_kill": "arm.kill", "solo_kill": "solo.kill", "mute_kill": "mute.kill",
+}
+
 # Ce qui demande une LOGIQUE, pas une adresse : boucles sur les pistes, bascules,
 # navigation relative. Listé ici pour que le rapport soit honnête plutôt que flou.
 LOGIQUE = {
@@ -99,6 +115,13 @@ def main() -> int:
     num = numeros()
 
     lignes, couvert, sans_adresse, hors_table = [], [], [], []
+    gestes = []
+    for fonction, verbe in sorted(GESTES.items()):
+        if fonction not in num:
+            continue
+        kind, n = num[fonction]
+        lignes.append(f"verb  {kind:<4} 1 {n:<4} {verbe}")
+        gestes.append(fonction)
     for fonction, (adresse, args) in sorted(TABLE.items()):
         if fonction not in num:
             continue                      # STC ne lui donne aucun numéro par défaut
@@ -113,7 +136,7 @@ def main() -> int:
     # la main. On tente les trois formes, et on n'émet que ce qui existe vraiment.
     auto = []
     for fonction in sorted(num):
-        if fonction in TABLE or fonction in LOGIQUE:
+        if fonction in TABLE or fonction in LOGIQUE or fonction in GESTES:
             continue
         for adresse, args in ((f"/live/song/{fonction}", []),
                               (f"/live/song/set/{fonction}", ["$a"]),
@@ -137,7 +160,8 @@ def main() -> int:
 #
 # Couverture vérifiée contre l'AbletonOSC installé :
 #   {len(couvert):>3} traduites a la main   +   {len(auto):>3} reconnues automatiquement
-#   {len(LOGIQUE):>3} demandent une logique (boucles, bascules, navigation relative) — à venir
+#   {len(gestes):>3} rendues par un GESTE (boucles, bascules, navigation relative)
+#   {len(LOGIQUE) - len(gestes):>3} gestes restants (inversions, rotations de routage, devices)
 #   {len(hors_table):>3} sans équivalent dans AbletonOSC (vues, verrouillages, sélections fines)
 
 group   stc
@@ -169,7 +193,8 @@ text  /live/song/get/scenes/name  ->  scenes
     print(f"config/stc.map : {len(lignes)} lignes")
     print(f"  traduites a la main : {len(couvert)}")
     print(f"  reconnues auto      : {len(auto)}  ({', '.join(auto[:8])} …)")
-    print(f"  logique a ecrire : {len(LOGIQUE)}  ({', '.join(sorted(LOGIQUE)[:6])} …)")
+    print(f"  gestes           : {len(gestes)}")
+    print(f"  gestes restants  : {len(LOGIQUE) - len(gestes)}  ({', '.join(sorted(LOGIQUE)[:6])} …)")
     print(f"  sans equivalent  : {len(hors_table)}")
     if sans_adresse:
         print(f"  adresse absente d AbletonOSC : {sans_adresse}")
