@@ -45,6 +45,7 @@ class Bridge:
         for w in m.watches:
             self._watches.setdefault(w.address, []).append(w)
         self._dernier: dict[int, float] = {}   # debit des watch limites
+        self._sale = False                     # etat modifie depuis la derniere ecriture
         self._texts: dict[str, list] = {}
         for t in m.texts:
             self._texts.setdefault(t.address, []).append(t)
@@ -158,9 +159,11 @@ class Bridge:
                       "/live/song/get/num_scenes", "/live/song/get/num_tracks",
                       "/live/song/get/is_playing", "/live/song/get/tempo"]
         for adresse in list(dict.fromkeys(list(self._watches) + list(self._texts) + essentiels)):
-            # /live/song/get/tempo  ->  /live/song/start_listen/tempo
-            ecoute = adresse.replace("/get/", "/start_listen/")
-            self.sock.sendto(osc.encode(ecoute), (self.m.host, self.m.send_port))
+            # Les listes (track_names, scenes/name) n'ont PAS de start_listen : AbletonOSC
+            # repond « Unknown OSC address ». On se contente de les relire au rappel.
+            if adresse not in self._texts:
+                self.sock.sendto(osc.encode(adresse.replace("/get/", "/start_listen/")),
+                                 (self.m.host, self.m.send_port))
             self.sock.sendto(osc.encode(adresse), (self.m.host, self.m.send_port))
         self.log(f"{len(self._watches)} abonnements, {len(self._texts)} textes")
 
@@ -179,6 +182,8 @@ class Bridge:
             self.state["_playing"] = args[0]
         elif adresse == "/live/song/get/tempo" and args:
             self.state["_tempo"] = args[0]
+        if adresse.startswith("/live/") and args:
+            self._sale = True
         for w in self._watches.get(adresse, []):
             if w.arg < len(args):
                 v = args[w.arg]
@@ -189,7 +194,7 @@ class Bridge:
             # Le texte ne passe pas en MIDI : il va dans le fichier que le JS du
             # Stream Deck relit — le motif déjà éprouvé par songs/loader.js.
             self.state[t.key] = args if len(args) != 1 else args[0]
-            self._ecrire_etat()
+            self._sale = True
 
     def _ecrire_etat(self):
         tmp = self.state_file.with_suffix(".tmp")
