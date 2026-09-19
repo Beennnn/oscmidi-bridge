@@ -1,0 +1,68 @@
+# Dialecte de Selected Track Control, traduit en OSC — GÉNÉRÉ, ne pas éditer.
+#   régénérer :  python3 tools/gen_stc_map.py
+#
+# Mêmes numéros de note et de CC que les réglages par défaut de STC : on retire STC,
+# on charge ce fichier, et le contrôleur n'a pas bougé d'un pouce. Le retour d'état
+# en plus, qui est ce que STC n'a jamais su faire.
+#
+# Couverture vérifiée contre l'AbletonOSC installé :
+#    34 traduites a la main   +     2 reconnues automatiquement
+#    32 demandent une logique (boucles, bascules, navigation relative) — à venir
+#    57 sans équivalent dans AbletonOSC (vues, verrouillages, sélections fines)
+
+group   stc
+target  127.0.0.1:11000 -> 11001
+
+send  note 1 0    /live/track/set/arm $track $a
+send  note 1 117  /live/song/set/arrangement_overdub $a
+send  note 1 13   /live/song/set/back_to_arranger $a
+send  note 1 25   /live/song/set/clip_trigger_quantization $a
+send  note 1 29   /live/song/continue_playing
+send  note 1 69   /live/device/set/parameter/value $track 0 0 $a
+send  cc   1 120  /live/song/set/groove_amount $a.0
+send  note 1 18   /live/song/set/loop $a
+send  note 1 12   /live/song/set/metronome $a
+send  note 1 26   /live/song/set/midi_recording_quantization $a
+send  note 1 2    /live/track/set/mute $track $a
+send  note 1 110  /live/song/set/nudge_down $a
+send  note 1 111  /live/song/set/nudge_up $a
+send  note 1 14   /live/song/set/arrangement_overdub $a
+send  cc   1 23   /live/track/set/panning $track $a
+send  note 1 38   /live/scene/fire_selected
+send  note 1 16   /live/song/set/punch_in $a
+send  note 1 17   /live/song/set/punch_out $a
+send  note 1 19   /live/song/set/record_mode $a
+send  note 1 81   /live/song/redo
+send  note 1 66   /live/view/set/selected_device $a
+send  cc   1 2    /live/view/set/selected_scene $a
+send  cc   1 8    /live/view/set/selected_track $a
+send  note 1 118  /live/song/set/session_record $a
+send  note 1 1    /live/track/set/solo $track $a
+send  note 1 28   /live/song/start_playing
+send  note 1 49   /live/song/stop_all_clips
+send  note 1 27   /live/song/stop_playing
+send  note 1 48   /live/track/stop_all_clips $track
+send  note 1 6    /live/track/set/current_monitoring_state $track $a
+send  note 1 86   /live/song/tap_tempo
+send  cc   1 86   /live/song/set/tempo $a.0
+send  note 1 80   /live/song/undo
+send  cc   1 22   /live/track/set/volume $track $a
+send  note 1 104  /live/song/create_return_track   # auto : create_return_track
+send  note 1 109  /live/song/re_enable_automation   # auto : re_enable_automation
+
+# ══ RETOUR D'ÉTAT — Live vers le contrôleur ════════════════════════════════
+# Selected Track Control n'envoie RIEN en retour : c'est ce qui manque depuis
+# douze ans. Ces CC sont libres dans son dialecte (les siens s'arrêtent à 52).
+watch /live/song/get/is_playing      0  ->  cc 1 100
+watch /live/view/get/selected_scene  0  ->  cc 1 101
+watch /live/song/get/tempo           0  ->  cc 1 102  $v-50
+watch /live/view/get/selected_track  0  ->  cc 1 103
+watch /live/song/get/num_scenes      0  ->  cc 1 104
+watch /live/song/get/num_tracks      0  ->  cc 1 105
+watch /live/song/get/metronome       0  ->  cc 1 106
+watch /live/song/get/record_mode     0  ->  cc 1 107
+watch /live/song/get/loop            0  ->  cc 1 108
+
+# Ce que le MIDI ne peut pas porter part dans state.json.
+text  /live/song/get/track_names  ->  tracks
+text  /live/song/get/scenes/name  ->  scenes
