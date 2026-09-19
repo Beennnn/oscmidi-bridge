@@ -133,3 +133,20 @@ verb  cc 92   mute.exclusive
 verb  cc 93   arm.kill
 verb  cc 94   solo.kill
 verb  cc 95   mute.kill
+
+
+# ══ CE QUE LA PASSERELLE PEUT REPRENDRE AUX AUTRES SCRIPTS ══════════════════
+#
+# ActionStation publie aujourd'hui l'état des pistes vers son plugin Stream Deck
+# (noms, couleurs, mute/solo/arm, VU). AbletonOSC expose tout cela : il suffit de
+# décommenter. Les VU sont DÉBITÉS — c'est ce qui a saturé le CPU du plugin MIDI
+# le 13/09, et 120 ms avait réglé l'affaire.
+#
+# watch /live/track/get/output_meter_level 0  ->  cc 110  every 120ms
+# watch /live/track/get/color              0  ->  cc 111
+# text  /live/song/get/track_names             ->  tracks     (déjà actif plus haut)
+#
+# Ce qu'AbletonOSC ne sait PAS faire, et qui justifie de garder un script à part :
+#   le NAVIGATEUR de Live — charger un instrument ou un plugin depuis le deck.
+#   C'est la seule fonction d'ActionStation et de HJF_Plugins qui n'a pas
+#   d'équivalent OSC dans la version officielle.
