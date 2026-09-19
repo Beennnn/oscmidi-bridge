@@ -120,7 +120,7 @@ def main() -> int:
         if fonction not in num:
             continue
         kind, n = num[fonction]
-        lignes.append(f"verb  {kind:<4} 1 {n:<4} {verbe}")
+        lignes.append(f"verb  {kind:<4} {n:<4} {verbe}")
         gestes.append(fonction)
     for fonction, (adresse, args) in sorted(TABLE.items()):
         if fonction not in num:
@@ -129,7 +129,7 @@ def main() -> int:
             sans_adresse.append((fonction, adresse)); continue
         kind, n = num[fonction]
         a = " ".join(str(x) for x in args)
-        lignes.append(f"send  {kind:<4} 1 {n:<4} {adresse}{(' ' + a) if a else ''}")
+        lignes.append(f"send  {kind:<4} {n:<4} {adresse}{(' ' + a) if a else ''}")
         couvert.append(fonction)
     # Beaucoup de fonctions STC portent le nom EXACT de la méthode ou de la propriété
     # Live correspondante — AbletonOSC les expose alors sans qu'il faille les écrire à
@@ -144,7 +144,7 @@ def main() -> int:
             if adresse in connues:
                 kind, n = num[fonction]
                 a = " ".join(str(x) for x in args)
-                lignes.append(f"send  {kind:<4} 1 {n:<4} {adresse}{(' ' + a) if a else ''}"
+                lignes.append(f"send  {kind:<4} {n:<4} {adresse}{(' ' + a) if a else ''}"
                               f"   # auto : {fonction}")
                 auto.append(fonction)
                 break
@@ -165,6 +165,7 @@ def main() -> int:
 #   {len(hors_table):>3} sans équivalent dans AbletonOSC (vues, verrouillages, sélections fines)
 
 group   stc
+channel 1          # STC parle sur le canal 1 ; les lignes ne le repetent pas
 target  127.0.0.1:11000 -> 11001
 
 """
@@ -175,15 +176,15 @@ target  127.0.0.1:11000 -> 11001
 # ══ RETOUR D'ÉTAT — Live vers le contrôleur ════════════════════════════════
 # Selected Track Control n'envoie RIEN en retour : c'est ce qui manque depuis
 # douze ans. Ces CC sont libres dans son dialecte (les siens s'arrêtent à 52).
-watch /live/song/get/is_playing      0  ->  cc 1 100
-watch /live/view/get/selected_scene  0  ->  cc 1 101
-watch /live/song/get/tempo           0  ->  cc 1 102  $v-50
-watch /live/view/get/selected_track  0  ->  cc 1 103
-watch /live/song/get/num_scenes      0  ->  cc 1 104
-watch /live/song/get/num_tracks      0  ->  cc 1 105
-watch /live/song/get/metronome       0  ->  cc 1 106
-watch /live/song/get/record_mode     0  ->  cc 1 107
-watch /live/song/get/loop            0  ->  cc 1 108
+watch /live/song/get/is_playing      0  ->  cc 100
+watch /live/view/get/selected_scene  0  ->  cc 101
+watch /live/song/get/tempo           0  ->  cc 102  $v-50
+watch /live/view/get/selected_track  0  ->  cc 103
+watch /live/song/get/num_scenes      0  ->  cc 104
+watch /live/song/get/num_tracks      0  ->  cc 105
+watch /live/song/get/metronome       0  ->  cc 106
+watch /live/song/get/record_mode     0  ->  cc 107
+watch /live/song/get/loop            0  ->  cc 108
 
 # Ce que le MIDI ne peut pas porter part dans state.json.
 text  /live/song/get/track_names  ->  tracks

@@ -14,62 +14,63 @@
 #   argument : $track et $scene valent la sélection courante, observée par la passerelle.
 
 group   catalogue
+channel 16         # canal par defaut : les lignes du canal 16 ne le repetent pas
 target  127.0.0.1:11000 -> 11001
 
 
 # ══ song ══════════════════════════════════════════════
-# send  cc 16 0   /live/song/capture_and_insert_scene
-# send  cc 16 1   /live/song/capture_midi
-# send  cc 16 2   /live/song/continue_playing
-# send  cc 16 3   /live/song/create_audio_track
-# send  cc 16 4   /live/song/create_midi_track
-# send  cc 16 5   /live/song/create_return_track
-# send  cc 16 6   /live/song/create_scene
-# send  cc 16 7   /live/song/cue_point/add_or_delete
-# send  cc 16 8   /live/song/cue_point/jump
-# send  cc 16 9   /live/song/cue_point/set/name $a
-# send  cc 16 10  /live/song/delete_return_track
-# send  cc 16 11  /live/song/delete_scene
-# send  cc 16 12  /live/song/delete_track
-# send  cc 16 13  /live/song/duplicate_scene
-# send  cc 16 14  /live/song/duplicate_track
-# send  cc 16 15  /live/song/export/structure
-# send  cc 16 16  /live/song/force_link_beat_time
-# watch /live/song/get/arrangement_overdub 0  ->  cc 16 17
-# watch /live/song/get/back_to_arranger 0  ->  cc 16 18
-# watch /live/song/get/can_redo 0  ->  cc 16 19
-# watch /live/song/get/can_undo 0  ->  cc 16 50
-# watch /live/song/get/clip_trigger_quantization 0  ->  cc 16 51
-# watch /live/song/get/cue_points 0  ->  cc 16 52
-# watch /live/song/get/current_song_time 0  ->  cc 16 53
-# watch /live/song/get/groove_amount 0  ->  cc 16 54
-# watch /live/song/get/is_ableton_link_enabled 0  ->  cc 16 55
-# watch /live/song/get/is_playing 0  ->  cc 16 56
-# watch /live/song/get/loop 0  ->  cc 16 57
-# watch /live/song/get/loop_length 0  ->  cc 16 58
-# watch /live/song/get/loop_start 0  ->  cc 16 59
-# watch /live/song/get/metronome 0  ->  cc 16 96
-# watch /live/song/get/midi_recording_quantization 0  ->  cc 16 97
-# watch /live/song/get/nudge_down 0  ->  cc 16 98
-# watch /live/song/get/nudge_up 0  ->  cc 16 99
-# watch /live/song/get/num_scenes 0  ->  cc 16 110
-# watch /live/song/get/num_tracks 0  ->  cc 16 111
-# watch /live/song/get/punch_in 0  ->  cc 16 112
-# watch /live/song/get/punch_out 0  ->  cc 16 113
-# watch /live/song/get/record_mode 0  ->  cc 16 114
-# watch /live/song/get/root_note 0  ->  cc 16 115
-# watch /live/song/get/scale_name 0  ->  cc 16 116
-# watch /live/song/get/scenes/name 0  ->  cc 16 117
-# watch /live/song/get/session_record 0  ->  cc 16 118
-# watch /live/song/get/session_record_status 0  ->  cc 16 119
-# watch /live/song/get/signature_denominator 0  ->  cc 16 120
-# watch /live/song/get/signature_numerator 0  ->  cc 16 121
-# watch /live/song/get/song_length 0  ->  cc 16 122
-# watch /live/song/get/tempo 0  ->  cc 16 123
-# watch /live/song/get/track_data 0  ->  cc 16 124
-# watch /live/song/get/track_names 0  ->  cc 16 125
-# send  cc 16 126 /live/song/jump_by
-# send  cc 16 127 /live/song/jump_to_next_cue
+# send  cc 0   /live/song/capture_and_insert_scene
+# send  cc 1   /live/song/capture_midi
+# send  cc 2   /live/song/continue_playing
+# send  cc 3   /live/song/create_audio_track
+# send  cc 4   /live/song/create_midi_track
+# send  cc 5   /live/song/create_return_track
+# send  cc 6   /live/song/create_scene
+# send  cc 7   /live/song/cue_point/add_or_delete
+# send  cc 8   /live/song/cue_point/jump
+# send  cc 9   /live/song/cue_point/set/name $a
+# send  cc 10  /live/song/delete_return_track
+# send  cc 11  /live/song/delete_scene
+# send  cc 12  /live/song/delete_track
+# send  cc 13  /live/song/duplicate_scene
+# send  cc 14  /live/song/duplicate_track
+# send  cc 15  /live/song/export/structure
+# send  cc 16  /live/song/force_link_beat_time
+# watch /live/song/get/arrangement_overdub 0  ->  cc 17
+# watch /live/song/get/back_to_arranger 0  ->  cc 18
+# watch /live/song/get/can_redo 0  ->  cc 19
+# watch /live/song/get/can_undo 0  ->  cc 50
+# watch /live/song/get/clip_trigger_quantization 0  ->  cc 51
+# watch /live/song/get/cue_points 0  ->  cc 52
+# watch /live/song/get/current_song_time 0  ->  cc 53
+# watch /live/song/get/groove_amount 0  ->  cc 54
+# watch /live/song/get/is_ableton_link_enabled 0  ->  cc 55
+# watch /live/song/get/is_playing 0  ->  cc 56
+# watch /live/song/get/loop 0  ->  cc 57
+# watch /live/song/get/loop_length 0  ->  cc 58
+# watch /live/song/get/loop_start 0  ->  cc 59
+# watch /live/song/get/metronome 0  ->  cc 96
+# watch /live/song/get/midi_recording_quantization 0  ->  cc 97
+# watch /live/song/get/nudge_down 0  ->  cc 98
+# watch /live/song/get/nudge_up 0  ->  cc 99
+# watch /live/song/get/num_scenes 0  ->  cc 110
+# watch /live/song/get/num_tracks 0  ->  cc 111
+# watch /live/song/get/punch_in 0  ->  cc 112
+# watch /live/song/get/punch_out 0  ->  cc 113
+# watch /live/song/get/record_mode 0  ->  cc 114
+# watch /live/song/get/root_note 0  ->  cc 115
+# watch /live/song/get/scale_name 0  ->  cc 116
+# watch /live/song/get/scenes/name 0  ->  cc 117
+# watch /live/song/get/session_record 0  ->  cc 118
+# watch /live/song/get/session_record_status 0  ->  cc 119
+# watch /live/song/get/signature_denominator 0  ->  cc 120
+# watch /live/song/get/signature_numerator 0  ->  cc 121
+# watch /live/song/get/song_length 0  ->  cc 122
+# watch /live/song/get/tempo 0  ->  cc 123
+# watch /live/song/get/track_data 0  ->  cc 124
+# watch /live/song/get/track_names 0  ->  cc 125
+# send  cc 126 /live/song/jump_by
+# send  cc 127 /live/song/jump_to_next_cue
 # send  cc 15 0   /live/song/jump_to_prev_cue
 # send  cc 15 1   /live/song/re_enable_automation
 # send  cc 15 2   /live/song/redo

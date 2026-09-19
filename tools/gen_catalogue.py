@@ -74,6 +74,7 @@ def main() -> int:
 #   argument : $track et $scene valent la sélection courante, observée par la passerelle.
 
 group   catalogue
+channel 16         # canal par defaut : les lignes du canal 16 ne le repetent pas
 target  127.0.0.1:11000 -> 11001
 """]
 
@@ -83,15 +84,18 @@ target  127.0.0.1:11000 -> 11001
         lignes.append(f"\n# ══ {base} ══════════════════════════════════════════════")
         for a in par_base[base]:
             canal, num = next(it)
+            # Le canal n'est écrit QUE s'il diffère du canal par défaut : une ligne
+            # sur le canal 16 s'écrit « send cc 42 /… », sans le répéter.
+            ch = "" if canal == 16 else f"{canal} "
             index = "$track " if base == "track" else "$scene " if base == "scene" else ""
             if "/set/" in a:
-                lignes.append(f"# send  cc {canal} {num:<3} {a} {index}$a")
+                lignes.append(f"# send  cc {ch}{num:<3} {a} {index}$a")
             elif "/get/" in a:
-                lignes.append(f"# watch {a} 0  ->  cc {canal} {num}")
+                lignes.append(f"# watch {a} 0  ->  cc {ch}{num}")
             elif "/start_listen/" in a or "/stop_listen/" in a:
                 continue                      # géré automatiquement par les `watch`
             else:
-                lignes.append(f"# send  cc {canal} {num:<3} {a} {index}".rstrip())
+                lignes.append(f"# send  cc {ch}{num:<3} {a} {index}".rstrip())
     Path("config/catalogue.map").write_text("\n".join(lignes) + "\n", encoding="utf-8")
     print(f"config/catalogue.map : {len(adr)} adresses, "
           f"{sum(1 for l in lignes if l.startswith('# send') or l.startswith('# watch'))} lignes prêtes à décommenter")
