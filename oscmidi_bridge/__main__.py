@@ -9,8 +9,9 @@ import signal
 import sys
 from pathlib import Path
 
-from .bridge import Bridge, PORT_DEFAUT
+from .bridge import Bridge
 from .mapping import load
+from .ports import inscrire_ports
 
 RACINE = Path(__file__).resolve().parent.parent
 
@@ -22,10 +23,18 @@ def journal(*a):
 def main(argv: list[str]) -> int:
     args = [a for a in argv[1:] if not a.startswith("--")]
     verify = "--verify" in argv
+    ports = "--ports" in argv
     chemin = Path(args[0]) if args else RACINE / "config" / "common.map"
     if not chemin.exists():
         journal(f"configuration introuvable : {chemin}")
         return 2
+    if ports:
+        # On inscrit la liste DANS le fichier plutôt que de la montrer : le nom exact
+        # d'un port MIDI ne se retient pas, et le recopier à la main est une source
+        # de fautes. Il n'y a qu'à décommenter celui qu'on veut.
+        for l in inscrire_ports(chemin):
+            journal(l)
+        return 0
     try:
         m = load(chemin)
     except ValueError as e:
@@ -43,7 +52,7 @@ def main(argv: list[str]) -> int:
             journal(f"  {w.address}[{w.arg}]  ->  {w.kind} {w.channel} {w.number}")
         return 0
 
-    b = Bridge(m, RACINE / "state.json", journal, PORT_DEFAUT)
+    b = Bridge(m, RACINE / "state.json", journal, m.port)
     signal.signal(signal.SIGTERM, lambda *_: b.stop())
     signal.signal(signal.SIGINT, lambda *_: b.stop())
     b.run()
