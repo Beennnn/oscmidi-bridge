@@ -52,7 +52,7 @@ def main(argv: list[str]) -> int:
             journal(f"  {w.address}[{w.arg}]  ->  {w.kind} {w.channel} {w.number}")
         return 0
 
-    b = Bridge(m, RACINE / "state.json", journal, m.port)
+    b = Bridge(m, RACINE / "state.json", journal, m.port, chemin)
     signal.signal(signal.SIGTERM, lambda *_: b.stop())
     signal.signal(signal.SIGINT, lambda *_: b.stop())
     b.run()

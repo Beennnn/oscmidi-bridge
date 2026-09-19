@@ -31,8 +31,11 @@ PORT_DEFAUT = "Ableton Loopback"
 
 
 class Bridge:
-    def __init__(self, m: Mapping, state_file: Path, log=print, port_name: str = PORT_DEFAUT):
+    def __init__(self, m: Mapping, state_file: Path, log=print, port_name: str = PORT_DEFAUT,
+                 config: Path | None = None):
         self.m = m
+        self.config = config          # fichier charge, pour le rechargement a chaud
+        self._mtime = self._empreinte()
         self.state_file = state_file
         self.log = log
         self.port_name = port_name
@@ -46,9 +49,53 @@ class Bridge:
             self._watches.setdefault(w.address, []).append(w)
         self._dernier: dict[int, float] = {}   # debit des watch limites
         self._sale = False                     # etat modifie depuis la derniere ecriture
+        self._ecrit = 0.0                      # date de la derniere ecriture
         self._texts: dict[str, list] = {}
         for t in m.texts:
             self._texts.setdefault(t.address, []).append(t)
+
+    # ── rechargement a chaud ────────────────────────────────────────────────
+    def _empreinte(self) -> float:
+        """Date de modification la plus recente du dossier de configuration.
+
+        On regarde tout le dossier, pas seulement le fichier charge : un `include`
+        edite ne changerait pas la date du fichier principal, et le rechargement
+        passerait a cote sans rien dire.
+        """
+        if not self.config:
+            return 0.0
+        try:
+            return max(f.stat().st_mtime for f in self.config.parent.glob("*.map"))
+        except ValueError:
+            return 0.0
+
+    def _indexer(self) -> None:
+        self._sends = {(x.kind, x.channel, x.number): x for x in self.m.sends}
+        self._verbs = {(v.kind, v.channel, v.number): v for v in self.m.verbs}
+        self._watches, self._texts = {}, {}
+        for w in self.m.watches:
+            self._watches.setdefault(w.address, []).append(w)
+        for t in self.m.texts:
+            self._texts.setdefault(t.address, []).append(t)
+
+    def _recharger(self) -> None:
+        """Relit la configuration sans redemarrer.
+
+        Une erreur de syntaxe NE DOIT PAS arreter la passerelle : on garde la
+        configuration precedente et on le dit. Editer un fichier pendant une
+        repetition ne peut donc pas couper le retour d'etat au milieu d'un morceau.
+        """
+        from .mapping import load
+        try:
+            neuf = load(self.config)
+        except Exception as e:
+            self.log(f"configuration REFUSEE, l'ancienne reste en place —\n{e}")
+            return
+        self.m = neuf
+        self._indexer()
+        self._abonner()
+        self.log(f"rechargee : {len(neuf.sends)} commandes · {len(neuf.verbs)} gestes · "
+                 f"{len(neuf.watches)} retours · {len(neuf.texts)} textes")
 
     # ── MIDI ────────────────────────────────────────────────────────────────
     @staticmethod
@@ -220,6 +267,17 @@ class Bridge:
                 msg = osc.decode(data)
                 if msg:
                     self._sur_osc(*msg)
+            # Ecriture groupee de l'etat : au plus quatre fois par seconde. Sans ca on
+            # reecrirait le fichier a chaque message recu — le meme reflexe que le
+            # debit des VU, qui avait sature le CPU du plugin MIDI le 13/09.
+            if self._sale and time.time() - self._ecrit > 0.25:
+                self._ecrit = time.time(); self._sale = False
+                self._ecrire_etat()
+            # Rechargement a chaud : on edite le fichier, on sauve, la passerelle suit.
+            emp = self._empreinte()
+            if emp > self._mtime:
+                self._mtime = emp
+                self._recharger()
             # Si Live redémarre, nos abonnements meurent avec lui sans prévenir :
             # on les repose périodiquement. C'est idempotent côté AbletonOSC.
             if time.time() - dernier_rappel > 30:
