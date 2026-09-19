@@ -28,6 +28,15 @@ from .verbs import GESTURES
 # bridge attaches to what is there and filters on the channel.
 DEFAULT_PORT = "Ableton Loopback"
 
+# Addresses AbletonOSC exposes as a `get` but NOT as a subscription. Measured
+# against the installed version, not guessed: each one answered "Unknown OSC
+# address". Lists (track_names, scenes/name) behave the same way and are already
+# excluded, being declared as `text`.
+NO_LISTEN = frozenset({
+    "/live/song/get/num_tracks",
+    "/live/song/get/num_scenes",
+})
+
 
 class Bridge:
     def __init__(self, m: Mapping, state_file: Path, log=print, port_name: str = DEFAULT_PORT,
@@ -204,9 +213,11 @@ class Bridge:
                       "/live/song/get/num_scenes", "/live/song/get/num_tracks",
                       "/live/song/get/is_playing", "/live/song/get/tempo"]
         for address in list(dict.fromkeys(list(self._watches) + list(self._texts) + essential)):
-            # Lists (track_names, scenes/name) have NO start_listen: AbletonOSC
-            # answers "Unknown OSC address". We simply re-read them on refresh.
-            if address not in self._texts:
+            # Some addresses have NO start_listen and AbletonOSC answers "Unknown
+            # OSC address" — every 30 s, straight into Live's log. Asking once is a
+            # mistake; asking forever is noise that hides real errors. They are
+            # re-read by the `get` below, which is plenty for values that barely move.
+            if address not in self._texts and address not in NO_LISTEN:
                 self.sock.sendto(osc.encode(address.replace("/get/", "/start_listen/")),
                                  (self.m.host, self.m.send_port))
             self.sock.sendto(osc.encode(address), (self.m.host, self.m.send_port))
