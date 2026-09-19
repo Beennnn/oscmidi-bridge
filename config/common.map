@@ -1,0 +1,85 @@
+# Correspondances communes à tous les groupes — Ableton Live via AbletonOSC.
+#
+# TOUT passe par le canal 16 d'« Ableton Loopback », en CC uniquement.
+# Vérifié le 2026-09-19 : sur ce canal, les CC sont ENTIÈREMENT libres (0 utilisé
+# par le rig), et le set Funk n'a aucun mappage Cmd+M dessus. Les NOTES du canal 16
+# sont prises par les déclencheurs FX et drums d'Evy — on n'y touche pas.
+#
+# Convention de plage :
+#   20-29  transport et tempo        40-49  pistes
+#   30-39  scènes                    50-59  routage (ClyphX)
+#   100+   retour d'état, de Live vers le rig
+#
+# Côté trevligaspel, une commande s'écrit donc  {cc:16,20,0}  et un retour se lit
+#   [(cc:16,100,*){@LivePlay:#@e_ccvalue#}]
+
+group   common
+target  127.0.0.1:11000 -> 11001
+
+
+# ══ COMMANDES  (le rig → Live) ══════════════════════════════════════════════
+
+# ── transport ───────────────────────────────────────────────────────────────
+send  cc 16 20   /live/song/start_playing          # STC : play_stop, start_playing
+send  cc 16 21   /live/song/stop_playing
+send  cc 16 22   /live/song/continue_playing
+send  cc 16 23   /live/song/stop_all_clips
+send  cc 16 24   /live/song/tap_tempo              # STC : tap_tempo
+
+# Tempo : 0-127 → 50-177 bpm, la MÊME convention que le cc:7,20 déjà en place
+# (@SongBpm-50). Le « .0 » force le float : Live refuse un tempo entier.
+send  cc 16 25   $v+50   /live/song/set/tempo $a.0
+send  cc 16 26   /live/song/set/metronome $a       # 0 ou 127 ; Live lit la valeur
+
+# ── scènes  (413 des 560 messages que le rig envoyait à STC) ────────────────
+send  cc 16 30   /live/view/set/selected_scene $a  # STC : select_scene, en absolu
+send  cc 16 31   /live/scene/fire_selected         # STC : play_selected_scene
+send  cc 16 32   /live/scene/fire $a               # lancer une scène par son index
+
+# ── pistes  (l'index de piste EST la valeur du CC) ──────────────────────────
+send  cc 16 40   /live/view/set/selected_track $a
+send  cc 16 41   /live/track/set/arm  $a true      # STC : arm
+send  cc 16 42   /live/track/set/arm  $a false
+send  cc 16 43   /live/track/set/solo $a true      # STC : solo
+send  cc 16 44   /live/track/set/solo $a false
+send  cc 16 45   /live/track/set/mute $a true      # STC : mute
+send  cc 16 46   /live/track/set/mute $a false
+send  cc 16 47   /live/track/set/current_monitoring_state $a 0   # STC : switch_monitoring (In)
+send  cc 16 48   /live/track/set/current_monitoring_state $a 1   #                          (Auto)
+send  cc 16 49   /live/track/set/current_monitoring_state $a 2   #                          (Off)
+
+# Les variantes EXCLUSIVES de STC (solo_exclusive, mute_exclusive, solo_kill) n'ont
+# pas d'équivalent en une adresse : ce sont des boucles sur toutes les pistes. Elles
+# s'écrivent côté trevligaspel, qui connaît le nombre de pistes par le CC 105.
+
+
+# ══ CLYPHX  (les deux macros qui restaient) ═════════════════════════════════
+#
+# $G_FNK$ route Main et C-Cue vers Ext. Out 1/2. AbletonOSC l'expose, mais l'index
+# du routage dépend de l'interface audio de LA machine : il faut le lire une fois,
+# puis écrire les deux lignes ci-dessous avec les bons numéros.
+#
+#   oscsend /live/track/get/available_output_routing_types 0
+#
+# send  cc 16 50   /live/track/set/output_routing_type    0 <index Ext. Out>
+# send  cc 16 51   /live/track/set/output_routing_channel 0 <index 1/2>
+
+
+# ══ RETOUR D'ÉTAT  (Live → le rig) ══════════════════════════════════════════
+#
+# C'est la seule chose que le MIDI seul ne pouvait pas donner, et la raison d'être
+# de la passerelle : le rig cesse d'envoyer en aveugle.
+
+watch /live/song/get/is_playing         0  ->  cc 16 100
+watch /live/view/get/selected_scene     0  ->  cc 16 101   # borné à 127, la passerelle le dit
+watch /live/song/get/tempo              0  ->  cc 16 102  $v-50
+watch /live/view/get/selected_track     0  ->  cc 16 103
+watch /live/song/get/num_scenes         0  ->  cc 16 104
+watch /live/song/get/num_tracks         0  ->  cc 16 105
+watch /live/song/get/metronome          0  ->  cc 16 106
+
+# ── ce que le MIDI ne peut pas porter : les textes ──────────────────────────
+# Ils vont dans le fichier d'état JSON, relu par le JS du Stream Deck avec
+# io.loadFile — exactement le motif de songs/loader.js.
+text  /live/song/get/track_names   ->  tracks
+text  /live/song/get/scenes/name   ->  scenes
