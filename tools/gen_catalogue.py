@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Génère `config/catalogue.txt` : TOUTES les adresses d'AbletonOSC, commentées.
+"""Generate `catalogue.txt`: EVERY AbletonOSC address, commented out.
 
-Le principe : on n'écrit plus une ligne de configuration, on en **décommente** une.
-Chaque adresse exposée par l'AbletonOSC installé apparaît avec un numéro de CC déjà
-attribué, unique, dans un canal libre — il n'y a qu'à retirer le « # ».
+The idea: you no longer write a configuration line, you **uncomment** one. Every
+address the installed AbletonOSC exposes appears with a CC number already assigned,
+unique, on a free channel — just remove the `#`.
 
-Les numéros sont attribués dans un ORDRE D'UTILITÉ (song, view, scene, track, puis
-le reste) pour que ce qui sert tous les jours tombe sur le canal 16, celui dont on a
-vérifié qu'il est entièrement libre. Quand il est plein, on déborde sur 15 puis 14 —
-et l'en-tête le dit, parce que ces deux-là portent des presets Evy inactifs et un
-CC 100 du profil Live : à vérifier avant de décommenter.
+Numbers are assigned in ORDER OF USEFULNESS (song, view, scene, track, then the
+rest) so that what gets used daily lands on the default channel, the one verified
+to be entirely free. When it fills up, the assignment overflows onto the next two —
+and the header says so, because an overflow channel has NOT been verified free:
+check it before uncommenting.
 """
 from __future__ import annotations
 
@@ -23,12 +23,14 @@ ABLETONOSC = Path.home() / "Music/Ableton/User Library/Remote Scripts/AbletonOSC
 BASES = {"song.py": "song", "track.py": "track", "clip.py": "clip", "device.py": "device",
          "clip_slot.py": "clip_slot", "scene.py": "scene", "view.py": "view",
          "application.py": "application"}
-# Numéros déjà pris par common.txt sur le canal 16 — on ne les réattribue pas.
-PRIS_16 = set(range(20, 50)) | set(range(60, 96)) | set(range(100, 110))
-ORDRE = ["song", "view", "scene", "track", "clip", "clip_slot", "device", "application"]
+# Default channel, and the overflow channels used once it is full.
+CHANNEL, OVERFLOW = 16, (15, 14)
+# Numbers already taken by the hand-written configuration — never reassigned.
+TAKEN = set(range(20, 50)) | set(range(60, 96)) | set(range(100, 110))
+ORDER = ["song", "view", "scene", "track", "clip", "clip_slot", "device", "application"]
 
 
-def adresses() -> set[str]:
+def addresses() -> set[str]:
     out: set[str] = set()
     for f in ABLETONOSC.glob("*.py"):
         s = f.read_text(encoding="utf-8", errors="replace")
@@ -36,77 +38,77 @@ def adresses() -> set[str]:
         out |= set(re.findall(r'add_handler\(\s*"(/live/[^"%]+)"', s))
         for m in re.finditer(r'(?:for method in|methods\s*=)\s*\[(.*?)\]', s, re.S):
             out |= {f"/live/{base}/{n}" for n in re.findall(r'"(\w+)"', m.group(1))}
-        for cle in ("properties_rw", "properties_r"):
-            for m in re.finditer(cle + r"\s*=\s*\[(.*?)\]", s, re.S):
+        for key in ("properties_rw", "properties_r"):
+            for m in re.finditer(key + r"\s*=\s*\[(.*?)\]", s, re.S):
                 for p in re.findall(r'"(\w+)"', m.group(1)):
                     out.add(f"/live/{base}/get/{p}")
-                    if cle == "properties_rw":
+                    if key == "properties_rw":
                         out.add(f"/live/{base}/set/{p}")
     return out
 
 
-def _sortie() -> Path:
-    """Ou ecrire : la configuration du rig vit dans un depot PRIVE, pas ici."""
+def _output() -> Path:
+    """Where to write: a real rig's configuration lives in its own repository."""
     import os
     base = Path(os.environ.get("OSCMIDI_CONFIG_DIR",
-                               Path.home() / "dev/music/rig-config/oscmidi"))
+                               Path.home() / ".config/oscmidi"))
     return base / "catalogue.txt" if base.exists() else Path("examples") / "catalogue.txt"
 
 
 def main() -> int:
     if not ABLETONOSC.exists():
-        print(f"AbletonOSC introuvable : {ABLETONOSC}"); return 2
-    adr = sorted(adresses())
-    # attribution : canal 16 d'abord (hors numéros déjà pris), puis 15, puis 14
-    libres = [(16, n) for n in range(128) if n not in PRIS_16] \
-           + [(15, n) for n in range(128)] + [(14, n) for n in range(128)]
-    it = iter(libres)
+        print(f"AbletonOSC not found: {ABLETONOSC}"); return 2
+    adr = sorted(addresses())
+    # assignment: default channel first (minus the taken numbers), then the overflows
+    free = [(CHANNEL, n) for n in range(128) if n not in TAKEN]
+    for c in OVERFLOW:
+        free += [(c, n) for n in range(128)]
+    it = iter(free)
 
-    par_base: dict[str, list[str]] = {}
+    by_base: dict[str, list[str]] = {}
     for a in adr:
-        par_base.setdefault(a.split("/")[2], []).append(a)
+        by_base.setdefault(a.split("/")[2], []).append(a)
 
-    lignes = [f"""# CATALOGUE — toutes les adresses de l'AbletonOSC installé. GÉNÉRÉ, ne pas éditer.
-#   régénérer :  python3 tools/gen_catalogue.py
+    lines = [f"""# CATALOGUE — every address of the installed AbletonOSC. GENERATED, do not edit.
+#   regenerate:  python3 tools/gen_catalogue.py
 #
-# {len(adr)} adresses. Chacune a déjà son numéro : il n'y a qu'à retirer le « # ».
+# {len(adr)} addresses. Each already has its number: just remove the leading `#`.
 #
-# ⚠ Le canal 16 est vérifié libre (0 CC utilisé par le rig, 0 mappage Cmd+M dans le
-#   set Funk). Les canaux 15 et 14, où déborde la fin du catalogue, portent des
-#   presets Evy inactifs et un CC 100 du profil Live : VÉRIFIER avant de décommenter.
+# WARNING: check that the default channel really is free on your setup, and above
+#   all the overflow channels — nothing guarantees they are.
 #
-# Conventions :  set/…  → send (la valeur du CC devient l'argument $a)
-#                get/…  → watch (la réponse de Live revient en CC)
-#                le reste → send sans argument (une méthode : play, undo, fire…)
-#   Les adresses qui exigent un INDEX (piste, scène, device) le prennent en premier
-#   argument : $track et $scene valent la sélection courante, observée par la passerelle.
+# Conventions:  set/…  -> send  (the CC value becomes the $a argument)
+#               get/…  -> watch (Live's reply comes back as a CC)
+#               anything else -> send with no argument (a method: play, undo, fire…)
+#   Addresses that require an INDEX (track, scene, device) take it as the first
+#   argument: $track and $scene are the current selection, observed by the bridge.
 
 group   catalogue
-channel 16         # canal par defaut : les lignes du canal 16 ne le repetent pas
+channel {CHANNEL}         # default channel: lines on this channel do not repeat it
 target  127.0.0.1:11000 -> 11001
 """]
 
-    for base in ORDRE + [b for b in par_base if b not in ORDRE]:
-        if base not in par_base:
+    for base in ORDER + [b for b in by_base if b not in ORDER]:
+        if base not in by_base:
             continue
-        lignes.append(f"\n# ══ {base} ══════════════════════════════════════════════")
-        for a in par_base[base]:
-            canal, num = next(it)
-            # Le canal n'est écrit QUE s'il diffère du canal par défaut : une ligne
-            # sur le canal 16 s'écrit « send cc 42 /… », sans le répéter.
-            ch = "" if canal == 16 else f"{canal} "
+        lines.append(f"\n# ══ {base} ══════════════════════════════════════════════")
+        for a in by_base[base]:
+            chan, num = next(it)
+            # The channel is written ONLY when it differs from the default: a line
+            # on the default channel reads `send cc 42 /…`, without repeating it.
+            ch = "" if chan == CHANNEL else f"{chan} "
             index = "$track " if base == "track" else "$scene " if base == "scene" else ""
             if "/set/" in a:
-                lignes.append(f"# send  cc {ch}{num:<3} {a} {index}$a")
+                lines.append(f"# send  cc {ch}{num:<3} {a} {index}$a")
             elif "/get/" in a:
-                lignes.append(f"# watch {a} 0  ->  cc {ch}{num}")
+                lines.append(f"# watch {a} 0  ->  cc {ch}{num}")
             elif "/start_listen/" in a or "/stop_listen/" in a:
-                continue                      # géré automatiquement par les `watch`
+                continue                      # handled automatically by the `watch` lines
             else:
-                lignes.append(f"# send  cc {ch}{num:<3} {a} {index}".rstrip())
-    _sortie().write_text("\n".join(lignes) + "\n", encoding="utf-8")
-    print(f"{_sortie()} : {len(adr)} adresses, "
-          f"{sum(1 for l in lignes if l.startswith('# send') or l.startswith('# watch'))} lignes prêtes à décommenter")
+                lines.append(f"# send  cc {ch}{num:<3} {a} {index}".rstrip())
+    _output().write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"{_output()}: {len(adr)} addresses, "
+          f"{sum(1 for l in lines if l.startswith('# send') or l.startswith('# watch'))} lines ready to uncomment")
     return 0
 
 

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>              <string>dev.oscmidi.bridge</string>
+  <!-- PINNED interpreter: the one that has python-rtmidi. On macOS the system
+       python (/usr/bin/python3) does NOT, and the service dies at startup. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PYTHON__</string>
+    <string>-m</string>
+    <string>oscmidi_bridge</string>
+    <!-- Path to YOUR configuration. This repository carries the engine only. -->
+    <string>__CONFIG__</string>
+  </array>
+  <key>WorkingDirectory</key>   <string>__REPO__</string>
+  <!-- KeepAlive: the bridge must survive a restart of the MIDI host or of Live.
+       It does nothing destructive at startup, so restarting it is always safe. -->
+  <key>KeepAlive</key>          <true/>
+  <key>RunAtLoad</key>          <true/>
+  <key>ThrottleInterval</key>   <integer>10</integer>
+  <key>StandardOutPath</key>    <string>__REPO__/bridge.log</string>
+  <key>StandardErrorPath</key>  <string>__REPO__/bridge.log</string>
+</dict>
+</plist>

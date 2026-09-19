@@ -1,13 +1,12 @@
-"""Les verbes : ce qu'une adresse OSC seule ne sait pas faire.
+"""Gestures: what a single OSC address cannot express.
 
-Selected Track Control expose 127 fonctions ; 36 se traduisent par une adresse.
-Les autres sont des **gestes** : « la scène suivante », « solo exclusif », « inverser
-la lecture ». Live n'a pas d'adresse pour ça — ce sont des boucles ou des calculs
-sur un état. La passerelle, elle, connaît cet état : elle observe déjà la sélection,
-le nombre de pistes et de scènes, la lecture et le tempo.
+Some controller functions are not one address but a *move*: "next scene",
+"exclusive solo", "toggle playback". Live has no address for those — they are
+loops, or arithmetic over some current state. The bridge knows that state: it
+already watches the selection, the track and scene counts, playback and tempo.
 
-Chaque verbe rend une LISTE de messages à envoyer. Aucun ne lit l'état directement :
-il le reçoit, ce qui les rend testables sans Live.
+Each gesture returns a LIST of messages to send. None of them reads the state
+directly — it is passed in, which makes them testable without Live running.
 """
 
 from __future__ import annotations
@@ -15,132 +14,131 @@ from __future__ import annotations
 from typing import Any, Callable
 
 Msg = tuple[str, list[Any]]
-# état connu de la passerelle : scene, track, scenes (nombre), tracks (nombre),
+# State known to the bridge: scene, track, scenes (count), tracks (count),
 # playing, tempo
-Etat = dict[str, Any]
+State = dict[str, Any]
 
 
 def _rel(v: int) -> int:
-    """Décode un CC relatif en complément à deux — la convention des encodeurs.
+    """Decode a relative CC in two's complement — the encoder convention.
 
-    1-63 = vers le haut, 65-127 = vers le bas (65 valant −1). C'est ce qu'émettent
-    les molettes ; une valeur absolue passerait pour un saut énorme.
+    1-63 means up, 65-127 means down (65 being −1). That is what endless knobs
+    send; reading it as an absolute value would look like a huge jump.
     """
     return v if v < 64 else v - 128
 
 
-def _borne(n: int, haut: int | None) -> int:
+def _clamp(n: int, upper: int | None) -> int:
     n = max(0, n)
-    return n if haut is None else min(n, max(0, haut - 1))
+    return n if upper is None else min(n, max(0, upper - 1))
 
 
 # ── navigation ───────────────────────────────────────────────────────────────
 
-def scene_prev(e: Etat, v: int) -> list[Msg]:
-    return [("/live/view/set/selected_scene", [_borne(int(e.get("scene", 0)) - 1, None)])]
+def scene_prev(e: State, v: int) -> list[Msg]:
+    return [("/live/view/set/selected_scene", [_clamp(int(e.get("scene", 0)) - 1, None)])]
 
 
-def scene_next(e: Etat, v: int) -> list[Msg]:
-    return [("/live/view/set/selected_scene", [_borne(int(e.get("scene", 0)) + 1, e.get("scenes"))])]
+def scene_next(e: State, v: int) -> list[Msg]:
+    return [("/live/view/set/selected_scene", [_clamp(int(e.get("scene", 0)) + 1, e.get("scenes"))])]
 
 
-def scene_first(e: Etat, v: int) -> list[Msg]:
+def scene_first(e: State, v: int) -> list[Msg]:
     return [("/live/view/set/selected_scene", [0])]
 
 
-def scene_last(e: Etat, v: int) -> list[Msg]:
+def scene_last(e: State, v: int) -> list[Msg]:
     n = e.get("scenes")
     return [("/live/view/set/selected_scene", [max(0, int(n) - 1)])] if n else []
 
 
-def scene_scroll(e: Etat, v: int) -> list[Msg]:
+def scene_scroll(e: State, v: int) -> list[Msg]:
     return [("/live/view/set/selected_scene",
-             [_borne(int(e.get("scene", 0)) + _rel(v), e.get("scenes"))])]
+             [_clamp(int(e.get("scene", 0)) + _rel(v), e.get("scenes"))])]
 
 
-def track_prev(e: Etat, v: int) -> list[Msg]:
-    return [("/live/view/set/selected_track", [_borne(int(e.get("track", 0)) - 1, None)])]
+def track_prev(e: State, v: int) -> list[Msg]:
+    return [("/live/view/set/selected_track", [_clamp(int(e.get("track", 0)) - 1, None)])]
 
 
-def track_next(e: Etat, v: int) -> list[Msg]:
-    return [("/live/view/set/selected_track", [_borne(int(e.get("track", 0)) + 1, e.get("tracks"))])]
+def track_next(e: State, v: int) -> list[Msg]:
+    return [("/live/view/set/selected_track", [_clamp(int(e.get("track", 0)) + 1, e.get("tracks"))])]
 
 
-def track_first(e: Etat, v: int) -> list[Msg]:
+def track_first(e: State, v: int) -> list[Msg]:
     return [("/live/view/set/selected_track", [0])]
 
 
-def track_last(e: Etat, v: int) -> list[Msg]:
+def track_last(e: State, v: int) -> list[Msg]:
     n = e.get("tracks")
     return [("/live/view/set/selected_track", [max(0, int(n) - 1)])] if n else []
 
 
-def track_scroll(e: Etat, v: int) -> list[Msg]:
+def track_scroll(e: State, v: int) -> list[Msg]:
     return [("/live/view/set/selected_track",
-             [_borne(int(e.get("track", 0)) + _rel(v), e.get("tracks"))])]
+             [_clamp(int(e.get("track", 0)) + _rel(v), e.get("tracks"))])]
 
 
-def scene_play_next(e: Etat, v: int) -> list[Msg]:
+def scene_play_next(e: State, v: int) -> list[Msg]:
     m = scene_next(e, v)
     return m + [("/live/scene/fire", [m[0][1][0]])]
 
 
-def scene_play_prev(e: Etat, v: int) -> list[Msg]:
+def scene_play_prev(e: State, v: int) -> list[Msg]:
     m = scene_prev(e, v)
     return m + [("/live/scene/fire", [m[0][1][0]])]
 
 
 # ── transport ────────────────────────────────────────────────────────────────
 
-def transport_toggle(e: Etat, v: int) -> list[Msg]:
-    joue = bool(e.get("playing"))
-    return [("/live/song/stop_playing" if joue else "/live/song/start_playing", [])]
+def transport_toggle(e: State, v: int) -> list[Msg]:
+    playing = bool(e.get("playing"))
+    return [("/live/song/stop_playing" if playing else "/live/song/start_playing", [])]
 
 
-def transport_pause(e: Etat, v: int) -> list[Msg]:
-    # « pause » = arrêter sans revenir au début : Live reprend avec continue_playing.
-    joue = bool(e.get("playing"))
-    return [("/live/song/stop_playing" if joue else "/live/song/continue_playing", [])]
+def transport_pause(e: State, v: int) -> list[Msg]:
+    # "pause" = stop without rewinding: Live resumes with continue_playing.
+    playing = bool(e.get("playing"))
+    return [("/live/song/stop_playing" if playing else "/live/song/continue_playing", [])]
 
 
-def tempo_nudge(e: Etat, v: int) -> list[Msg]:
+def tempo_nudge(e: State, v: int) -> list[Msg]:
     t = e.get("tempo")
     if t is None:
         return []
     return [("/live/song/set/tempo", [float(t) + _rel(v)])]
 
 
-def tempo_up(e: Etat, v: int) -> list[Msg]:
+def tempo_up(e: State, v: int) -> list[Msg]:
     t = e.get("tempo")
     return [("/live/song/set/tempo", [float(t) + 1])] if t is not None else []
 
 
-def tempo_down(e: Etat, v: int) -> list[Msg]:
+def tempo_down(e: State, v: int) -> list[Msg]:
     t = e.get("tempo")
     return [("/live/song/set/tempo", [float(t) - 1])] if t is not None else []
 
 
-# ── exclusif et extinction, sur toutes les pistes ────────────────────────────
-# STC les appelle *_exclusive et *_kill. Ce sont des boucles : Live n'a pas
-# d'adresse « solo exclusif », il a un solo par piste.
+# ── exclusive and kill, across every track ───────────────────────────────────
+# These are loops: Live has no "exclusive solo" address, it has one solo per track.
 
-def _boucle(prop: str, e: Etat, seule: bool) -> list[Msg]:
+def _loop(prop: str, e: State, only_selected: bool) -> list[Msg]:
     n = e.get("tracks")
     if not n:
-        return []           # sans le nombre de pistes on ne boucle pas à l'aveugle
+        return []           # without the track count we do not loop blindly
     sel = int(e.get("track", 0))
-    return [(f"/live/track/set/{prop}", [i, bool(seule and i == sel)]) for i in range(int(n))]
+    return [(f"/live/track/set/{prop}", [i, bool(only_selected and i == sel)]) for i in range(int(n))]
 
 
-def arm_exclusive(e: Etat, v: int) -> list[Msg]:  return _boucle("arm", e, True)
-def solo_exclusive(e: Etat, v: int) -> list[Msg]: return _boucle("solo", e, True)
-def mute_exclusive(e: Etat, v: int) -> list[Msg]: return _boucle("mute", e, True)
-def arm_kill(e: Etat, v: int) -> list[Msg]:  return _boucle("arm", e, False)
-def solo_kill(e: Etat, v: int) -> list[Msg]: return _boucle("solo", e, False)
-def mute_kill(e: Etat, v: int) -> list[Msg]: return _boucle("mute", e, False)
+def arm_exclusive(e: State, v: int) -> list[Msg]:  return _loop("arm", e, True)
+def solo_exclusive(e: State, v: int) -> list[Msg]: return _loop("solo", e, True)
+def mute_exclusive(e: State, v: int) -> list[Msg]: return _loop("mute", e, True)
+def arm_kill(e: State, v: int) -> list[Msg]:  return _loop("arm", e, False)
+def solo_kill(e: State, v: int) -> list[Msg]: return _loop("solo", e, False)
+def mute_kill(e: State, v: int) -> list[Msg]: return _loop("mute", e, False)
 
 
-VERBES: dict[str, Callable[[Etat, int], list[Msg]]] = {
+GESTURES: dict[str, Callable[[State, int], list[Msg]]] = {
     "scene.prev": scene_prev, "scene.next": scene_next,
     "scene.first": scene_first, "scene.last": scene_last,
     "scene.scroll": scene_scroll,

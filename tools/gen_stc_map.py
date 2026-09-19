@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Génère `config/stc.txt` : le dialecte de Selected Track Control, traduit en OSC.
+"""Generate `stc.txt`: the Selected Track Control dialect, translated to OSC.
 
-POURQUOI : STC est le standard de fait depuis plus de dix ans, et son fichier
-`settings.py` EST la spécification — numéros de notes et de CC compris. En parlant
-sa langue, la passerelle devient un remplacement direct : celui qui l'utilise ne
-touche à rien sur son contrôleur, il retire STC et il a le retour d'état en plus.
+WHY: STC has been the de facto standard for over a decade, and its `settings.py`
+IS the specification — note and CC numbers included. By speaking its language, the
+bridge becomes a drop-in replacement: you change nothing on your controller, you
+remove STC, and you gain feedback on top.
 
-Chaque adresse émise est VÉRIFIÉE contre l'AbletonOSC réellement installé : une
-ligne qui ne correspond à rien n'est pas écrite, elle est comptée dans le rapport.
-Pas de promesse de couverture invérifiable.
+Every emitted address is CHECKED against the AbletonOSC actually installed: a line
+that matches nothing is not written, it is counted in the report. No unverifiable
+coverage claims.
 """
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 STC = Path.home() / "Music/Ableton/User Library/Remote Scripts/Selected_Track_Control/settings.py"
-ADRESSES = Path("/tmp/abletonosc_addresses.json")
+ADDRESSES = Path("/tmp/abletonosc_addresses.json")
 
-# STC agit sur « la piste courante » : $track est la sélection, que la passerelle observe.
+# STC acts on "the current track": $track is the selection, which the bridge observes.
 TABLE: dict[str, tuple[str, list[str]]] = {
     # ── transport ────────────────────────────────────────────────────────────
     "start_playing":   ("/live/song/start_playing", []),
@@ -61,8 +61,8 @@ TABLE: dict[str, tuple[str, list[str]]] = {
     "device_on_off":     ("/live/device/set/parameter/value", ["$track", 0, 0, "$a"]),
 }
 
-# Les GESTES : pas une adresse mais un calcul sur l'état observé (voir verbs.py).
-GESTES = {
+# GESTURES: not an address but a computation over observed state (see verbs.py).
+GESTURES_BY_STC = {
     "prev_scene": "scene.prev", "next_scene": "scene.next",
     "first_scene": "scene.first", "last_scene": "scene.last",
     "scroll_scenes": "scene.scroll",
@@ -77,9 +77,9 @@ GESTES = {
     "arm_kill": "arm.kill", "solo_kill": "solo.kill", "mute_kill": "mute.kill",
 }
 
-# Ce qui demande une LOGIQUE, pas une adresse : boucles sur les pistes, bascules,
-# navigation relative. Listé ici pour que le rapport soit honnête plutôt que flou.
-LOGIQUE = {
+# What needs LOGIC rather than an address: loops over tracks, toggles, relative
+# navigation. Listed here so the report can be honest rather than vague.
+NEEDS_LOGIC = {
     "arm_exclusive", "arm_kill", "arm_flip", "solo_exclusive", "solo_kill", "solo_flip",
     "mute_exclusive", "mute_kill", "mute_flip", "prev_scene", "next_scene", "prev_track",
     "next_track", "first_scene", "last_scene", "first_track", "last_track",
@@ -89,101 +89,101 @@ LOGIQUE = {
 }
 
 
-def numeros() -> dict[str, tuple[str, int]]:
-    """Le numéro de note ou de CC que STC attribue à chaque fonction."""
+def numbers() -> dict[str, tuple[str, int]]:
+    """The note or CC number STC assigns to each function."""
     src = STC.read_text(encoding="utf-8")
-    bloc = src[src.index("midi_mapping = {"):]
+    block = src[src.index("midi_mapping = {"):]
     out: dict[str, tuple[str, int]] = {}
-    for m in re.finditer(r'"([a-z0-9_]+)"\s*:\s*([^\n]+)', bloc):
-        nom, val = m.group(1), m.group(2)
+    for m in re.finditer(r'"([a-z0-9_]+)"\s*:\s*([^\n]+)', block):
+        name, val = m.group(1), m.group(2)
         n = re.search(r"\bNote\((\d+)", val)
         if n:
-            out[nom] = ("note", int(n.group(1)))
+            out[name] = ("note", int(n.group(1)))
             continue
         c = re.search(r"\bCC\((\d+)", val)
         if c:
-            out[nom] = ("cc", int(c.group(1)))
+            out[name] = ("cc", int(c.group(1)))
     return out
 
 
-def _sortie() -> Path:
-    """Ou ecrire : la configuration du rig vit dans un depot PRIVE, pas ici."""
+def _output() -> Path:
+    """Where to write: a real rig's configuration lives in its own repository."""
     import os
     base = Path(os.environ.get("OSCMIDI_CONFIG_DIR",
-                               Path.home() / "dev/music/rig-config/oscmidi"))
+                               Path.home() / ".config/oscmidi"))
     return base / "stc.txt" if base.exists() else Path("examples") / "stc.txt"
 
 
 def main() -> int:
     if not STC.exists():
-        print(f"Selected Track Control introuvable : {STC}"); return 2
-    if not ADRESSES.exists():
-        print("liste des adresses AbletonOSC absente — relancer l'extraction"); return 2
-    connues = set(json.loads(ADRESSES.read_text()))
-    num = numeros()
+        print(f"Selected Track Control not found: {STC}"); return 2
+    if not ADDRESSES.exists():
+        print("AbletonOSC address list missing — run the extraction again"); return 2
+    known = set(json.loads(ADDRESSES.read_text()))
+    num = numbers()
 
-    lignes, couvert, sans_adresse, hors_table = [], [], [], []
-    gestes = []
-    for fonction, verbe in sorted(GESTES.items()):
-        if fonction not in num:
+    lines, covered, no_address, unmapped = [], [], [], []
+    gestures = []
+    for function, verbe in sorted(GESTURES_BY_STC.items()):
+        if function not in num:
             continue
-        kind, n = num[fonction]
-        lignes.append(f"verb  {kind:<4} {n:<4} {verbe}")
-        gestes.append(fonction)
-    for fonction, (adresse, args) in sorted(TABLE.items()):
-        if fonction not in num:
-            continue                      # STC ne lui donne aucun numéro par défaut
-        if adresse not in connues:
-            sans_adresse.append((fonction, adresse)); continue
-        kind, n = num[fonction]
+        kind, n = num[function]
+        lines.append(f"verb  {kind:<4} {n:<4} {verbe}")
+        gestures.append(function)
+    for function, (address, args) in sorted(TABLE.items()):
+        if function not in num:
+            continue                      # STC gives it no default number
+        if address not in known:
+            no_address.append((function, address)); continue
+        kind, n = num[function]
         a = " ".join(str(x) for x in args)
-        lignes.append(f"send  {kind:<4} {n:<4} {adresse}{(' ' + a) if a else ''}")
-        couvert.append(fonction)
-    # Beaucoup de fonctions STC portent le nom EXACT de la méthode ou de la propriété
-    # Live correspondante — AbletonOSC les expose alors sans qu'il faille les écrire à
-    # la main. On tente les trois formes, et on n'émet que ce qui existe vraiment.
+        lines.append(f"send  {kind:<4} {n:<4} {address}{(' ' + a) if a else ''}")
+        covered.append(function)
+    # Many STC functions carry the EXACT name of the matching Live method or
+    # property — AbletonOSC then exposes them without anyone writing them by hand.
+    # Try the three shapes, and emit only what actually exists.
     auto = []
-    for fonction in sorted(num):
-        if fonction in TABLE or fonction in LOGIQUE or fonction in GESTES:
+    for function in sorted(num):
+        if function in TABLE or function in NEEDS_LOGIC or function in GESTURES_BY_STC:
             continue
-        for adresse, args in ((f"/live/song/{fonction}", []),
-                              (f"/live/song/set/{fonction}", ["$a"]),
-                              (f"/live/view/set/{fonction}", ["$a"])):
-            if adresse in connues:
-                kind, n = num[fonction]
+        for address, args in ((f"/live/song/{function}", []),
+                              (f"/live/song/set/{function}", ["$a"]),
+                              (f"/live/view/set/{function}", ["$a"])):
+            if address in known:
+                kind, n = num[function]
                 a = " ".join(str(x) for x in args)
-                lignes.append(f"send  {kind:<4} {n:<4} {adresse}{(' ' + a) if a else ''}"
-                              f"   # auto : {fonction}")
-                auto.append(fonction)
+                lines.append(f"send  {kind:<4} {n:<4} {address}{(' ' + a) if a else ''}"
+                              f"   # auto: {function}")
+                auto.append(function)
                 break
         else:
-            hors_table.append(fonction)
+            unmapped.append(function)
 
-    entete = f"""# Dialecte de Selected Track Control, traduit en OSC — GÉNÉRÉ, ne pas éditer.
-#   régénérer :  python3 tools/gen_stc_map.py
+    header = f"""# The Selected Track Control dialect, translated to OSC — GENERATED, do not edit.
+#   regenerate:  python3 tools/gen_stc_map.py
 #
-# Mêmes numéros de note et de CC que les réglages par défaut de STC : on retire STC,
-# on charge ce fichier, et le contrôleur n'a pas bougé d'un pouce. Le retour d'état
-# en plus, qui est ce que STC n'a jamais su faire.
+# Same note and CC numbers as STC's defaults: remove STC, load this file, and the
+# controller has not moved an inch. With feedback on top, which is the one thing
+# STC never did.
 #
-# Couverture vérifiée contre l'AbletonOSC installé :
-#   {len(couvert):>3} traduites a la main   +   {len(auto):>3} reconnues automatiquement
-#   {len(gestes):>3} rendues par un GESTE (boucles, bascules, navigation relative)
-#   {len(LOGIQUE) - len(gestes):>3} gestes restants (inversions, rotations de routage, devices)
-#   {len(hors_table):>3} sans équivalent dans AbletonOSC (vues, verrouillages, sélections fines)
+# Coverage checked against the installed AbletonOSC:
+#   {len(covered):>3} translated by hand   +   {len(auto):>3} recognised automatically
+#   {len(gestures):>3} served by a GESTURE (loops, toggles, relative navigation)
+#   {len(NEEDS_LOGIC) - len(gestures):>3} gestures still missing (flips, routing rotation, devices)
+#   {len(unmapped):>3} with no AbletonOSC equivalent (views, locks, fine selections)
 
 group   stc
-channel 1          # STC parle sur le canal 1 ; les lignes ne le repetent pas
+channel 1          # STC speaks on channel 1; the lines below do not repeat it
 target  127.0.0.1:11000 -> 11001
 
 """
-    # Le retour d'état : ce que STC n'a jamais donné, et la raison d'être de la
-    # passerelle. Les CC 100+ sont libres dans le dialecte STC (ses CC s'arrêtent à 52).
-    retour = """
+    # Feedback: what STC never gave, and the whole point of the bridge. CC 100+
+    # are free in the STC dialect (its own CCs stop at 52).
+    feedback = """
 
-# ══ RETOUR D'ÉTAT — Live vers le contrôleur ════════════════════════════════
-# Selected Track Control n'envoie RIEN en retour : c'est ce qui manque depuis
-# douze ans. Ces CC sont libres dans son dialecte (les siens s'arrêtent à 52).
+# ══ FEEDBACK — Live back to the controller ═════════════════════════════════
+# Selected Track Control sends NOTHING back: that is what has been missing for a
+# decade. These CCs are free in its dialect (its own stop at 52).
 watch /live/song/get/is_playing      0  ->  cc 100
 watch /live/view/get/selected_scene  0  ->  cc 101
 watch /live/song/get/tempo           0  ->  cc 102  $v-50
@@ -194,19 +194,19 @@ watch /live/song/get/metronome       0  ->  cc 106
 watch /live/song/get/record_mode     0  ->  cc 107
 watch /live/song/get/loop            0  ->  cc 108
 
-# Ce que le MIDI ne peut pas porter part dans state.json.
+# What MIDI cannot carry goes to state.json.
 text  /live/song/get/track_names  ->  tracks
 text  /live/song/get/scenes/name  ->  scenes
 """
-    _sortie().write_text(entete + "\n".join(lignes) + retour, encoding="utf-8")
-    print(f"{_sortie()} : {len(lignes)} lignes")
-    print(f"  traduites a la main : {len(couvert)}")
-    print(f"  reconnues auto      : {len(auto)}  ({', '.join(auto[:8])} …)")
-    print(f"  gestes           : {len(gestes)}")
-    print(f"  gestes restants  : {len(LOGIQUE) - len(gestes)}  ({', '.join(sorted(LOGIQUE)[:6])} …)")
-    print(f"  sans equivalent  : {len(hors_table)}")
-    if sans_adresse:
-        print(f"  adresse absente d AbletonOSC : {sans_adresse}")
+    _output().write_text(header + "\n".join(lines) + feedback, encoding="utf-8")
+    print(f"{_output()}: {len(lines)} lines")
+    print(f"  translated by hand   : {len(covered)}")
+    print(f"  recognised automatically: {len(auto)}  ({', '.join(auto[:8])} …)")
+    print(f"  gestures             : {len(gestures)}")
+    print(f"  gestures still missing: {len(NEEDS_LOGIC) - len(gestures)}  ({', '.join(sorted(NEEDS_LOGIC)[:6])} …)")
+    print(f"  no AbletonOSC equivalent: {len(unmapped)}")
+    if no_address:
+        print(f"  address missing from AbletonOSC: {no_address}")
     return 0
 
 
