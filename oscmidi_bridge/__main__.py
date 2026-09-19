@@ -32,11 +32,13 @@ def main(argv: list[str]) -> int:
         journal(f"configuration refusée —\n{e}")
         return 2
 
-    journal(f"groupe « {m.group} » · {len(m.sends)} commandes · "
+    journal(f"groupe « {m.group} » · {len(m.sends)} commandes · {len(m.verbs)} gestes · "
             f"{len(m.watches)} retours · {len(m.texts)} textes · {chemin.name}")
     if verify:
         for s in m.sends:
             journal(f"  {s.kind} {s.channel:>2} {s.number:>3}  ->  {s.address} {s.args}")
+        for v in m.verbs:
+            journal(f"  {v.kind} {v.channel:>2} {v.number:>3}  ~>  {v.name}")
         for w in m.watches:
             journal(f"  {w.address}[{w.arg}]  ->  {w.kind} {w.channel} {w.number}")
         return 0

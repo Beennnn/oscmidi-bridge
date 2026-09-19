@@ -83,3 +83,27 @@ watch /live/song/get/metronome          0  ->  cc 16 106
 # io.loadFile — exactement le motif de songs/loader.js.
 text  /live/song/get/track_names   ->  tracks
 text  /live/song/get/scenes/name   ->  scenes
+
+
+# ══ GESTES  (calculés sur l'état, pas une simple adresse) ═══════════════════
+verb  cc 16 60   scene.prev
+verb  cc 16 61   scene.next
+verb  cc 16 62   scene.first
+verb  cc 16 63   scene.last
+verb  cc 16 64   scene.play_next
+verb  cc 16 65   scene.play_prev
+verb  cc 16 66   scene.scroll          # CC relatif : 1-63 monte, 65-127 descend
+verb  cc 16 70   track.prev
+verb  cc 16 71   track.next
+verb  cc 16 72   track.scroll
+verb  cc 16 80   transport.toggle      # STC : play_stop
+verb  cc 16 81   transport.pause
+verb  cc 16 82   tempo.up
+verb  cc 16 83   tempo.down
+verb  cc 16 84   tempo.nudge           # relatif
+verb  cc 16 90   arm.exclusive
+verb  cc 16 91   solo.exclusive
+verb  cc 16 92   mute.exclusive
+verb  cc 16 93   arm.kill
+verb  cc 16 94   solo.kill
+verb  cc 16 95   mute.kill

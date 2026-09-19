@@ -7,12 +7,35 @@
 #
 # Couverture vérifiée contre l'AbletonOSC installé :
 #    34 traduites a la main   +     2 reconnues automatiquement
-#    32 demandent une logique (boucles, bascules, navigation relative) — à venir
+#    22 rendues par un GESTE (boucles, bascules, navigation relative)
+#    10 gestes restants (inversions, rotations de routage, devices)
 #    57 sans équivalent dans AbletonOSC (vues, verrouillages, sélections fines)
 
 group   stc
 target  127.0.0.1:11000 -> 11001
 
+verb  note 1 3    arm.exclusive
+verb  note 1 10   arm.kill
+verb  note 1 37   scene.first
+verb  note 1 46   track.first
+verb  note 1 39   scene.last
+verb  note 1 47   track.last
+verb  note 1 5    mute.exclusive
+verb  note 1 8    mute.kill
+verb  note 1 83   scene.next
+verb  note 1 85   track.next
+verb  note 1 40   scene.play_next
+verb  note 1 21   transport.pause
+verb  note 1 36   scene.play_prev
+verb  note 1 20   transport.toggle
+verb  note 1 82   scene.prev
+verb  note 1 84   track.prev
+verb  cc   1 84   scene.scroll
+verb  cc   1 85   track.scroll
+verb  note 1 4    solo.exclusive
+verb  note 1 7    solo.kill
+verb  note 1 88   tempo.down
+verb  note 1 87   tempo.up
 send  note 1 0    /live/track/set/arm $track $a
 send  note 1 117  /live/song/set/arrangement_overdub $a
 send  note 1 13   /live/song/set/back_to_arranger $a
