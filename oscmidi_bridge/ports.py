@@ -28,13 +28,13 @@ def ports_disponibles() -> list[str]:
 
 
 def _reparer(nom: str) -> str:
-    """rtmidi rend les noms CoreMIDI en octets UTF-8 décodés en latin-1.
+    """rtmidi rend les noms CoreMIDI en octets UTF-8 décodés en MacRoman.
 
     « Périphérique » arrive donc en « P√©riph√©rique ». On refait le tour dans
     l'autre sens quand ça marche, et on laisse tel quel sinon.
     """
     try:
-        return nom.encode("latin-1").decode("utf-8")
+        return nom.encode("mac_roman").decode("utf-8")
     except (UnicodeEncodeError, UnicodeDecodeError):
         return nom
 

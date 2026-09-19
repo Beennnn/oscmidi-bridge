@@ -27,10 +27,10 @@ port    Ableton Loopback
 # port    Mackie2XR18
 # port    MackieB2Daw
 # port    NetDevices
-# port    P√©riph√©rique MIDI USB Port 1
-# port    P√©riph√©rique MIDI USB Port 2
+# port    Périphérique MIDI USB Port 1
+# port    Périphérique MIDI USB Port 2
 # port    RME Fireface UCX
-# port    R√©seau Session 1
+# port    Réseau Session 1
 # port    XR182Mackie
 # port    rig-alert
 #
