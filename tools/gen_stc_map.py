@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère `config/stc.map` : le dialecte de Selected Track Control, traduit en OSC.
+"""Génère `config/stc.txt` : le dialecte de Selected Track Control, traduit en OSC.
 
 POURQUOI : STC est le standard de fait depuis plus de dix ans, et son fichier
 `settings.py` EST la spécification — numéros de notes et de CC compris. En parlant
@@ -106,6 +106,14 @@ def numeros() -> dict[str, tuple[str, int]]:
     return out
 
 
+def _sortie() -> Path:
+    """Ou ecrire : la configuration du rig vit dans un depot PRIVE, pas ici."""
+    import os
+    base = Path(os.environ.get("OSCMIDI_CONFIG_DIR",
+                               Path.home() / "dev/music/rig-config/oscmidi"))
+    return base / "stc.txt" if base.exists() else Path("examples") / "stc.txt"
+
+
 def main() -> int:
     if not STC.exists():
         print(f"Selected Track Control introuvable : {STC}"); return 2
@@ -190,8 +198,8 @@ watch /live/song/get/loop            0  ->  cc 108
 text  /live/song/get/track_names  ->  tracks
 text  /live/song/get/scenes/name  ->  scenes
 """
-    Path("config/stc.map").write_text(entete + "\n".join(lignes) + retour, encoding="utf-8")
-    print(f"config/stc.map : {len(lignes)} lignes")
+    _sortie().write_text(entete + "\n".join(lignes) + retour, encoding="utf-8")
+    print(f"{_sortie()} : {len(lignes)} lignes")
     print(f"  traduites a la main : {len(couvert)}")
     print(f"  reconnues auto      : {len(auto)}  ({', '.join(auto[:8])} …)")
     print(f"  gestes           : {len(gestes)}")

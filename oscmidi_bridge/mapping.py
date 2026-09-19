@@ -10,7 +10,7 @@ contrairement au `-` du langage de trevligaspel, qui mangeait des commandes
 entières quand on posait un commentaire au mauvais endroit.
 
     group    bs
-    include  common.map
+    include  common.txt
     target   127.0.0.1:11000 -> 11001
 
     send  cc 13 20            /live/song/start_playing
