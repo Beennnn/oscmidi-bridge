@@ -1,0 +1,19 @@
+diff --git a/abletonosc/track.py b/abletonosc/track.py
+index 5e21353..5389dc8 100644
+--- a/abletonosc/track.py
++++ b/abletonosc/track.py
+@@ -18,7 +18,13 @@ class TrackHandler(AbletonOSCHandler):
+                     track_indices = [int(params[0])]
+ 
+                 for track_index in track_indices:
+-                    track = self.song.tracks[track_index]
++                    # 2026-09-19 (rig Beennnn) : index -1 = la piste MASTER (« Main »).
++                    # song.tracks ne la contient pas, et Python lirait -1 comme la
++                    # DERNIERE piste ordinaire — d'ou le cas explicite. Sans ca, le
++                    # volume et le routage du Main ne sont pas adressables en OSC, et
++                    # c'etait la seule chose que ClyphX savait faire et pas AbletonOSC.
++                    track = (self.song.master_track if track_index == -1
++                             else self.song.tracks[track_index])
+                     if include_track_id:
+                         rv = func(track, *args, tuple([track_index] + params[1:]))
+                     else:
