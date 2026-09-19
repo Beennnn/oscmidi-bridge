@@ -1,51 +1,50 @@
-# oscmidi-bridge — notes pour les sessions Claude
+# oscmidi-bridge — notes for maintainers
 
-Passerelle **OSC ↔ MIDI** entre Ableton Live (via AbletonOSC) et le rig Stream Deck
-(plugin trevligaspel). Daemon Python sous launchd, comme les autres `com.benoit.*`.
+OSC ↔ MIDI bridge between Ableton Live (via **AbletonOSC**) and a MIDI controller.
+Python daemon, no dependency beyond `python-rtmidi`.
 
-## La règle qui prime sur tout
+## The rule that outranks everything
 
-**La passerelle n'est jamais nécessaire pour jouer.** Aucune note, aucun son,
-aucune zone ne transite par elle : elle ne porte que du pilotage de Live et de
-l'affichage. Si elle tombe en concert, le rig continue et seul le retour d'état
-gèle. Toute évolution qui violerait ça est à refuser.
+**The bridge is never required to play.** No note, no sound, no keyboard zone goes
+through it: it carries only Live control and display. If it dies mid-show the rig
+keeps playing and only the feedback freezes. Any change that would break that rule
+is to be refused.
 
-## Choix de conception, et pourquoi
+## Design choices, and why
 
-- **Canal 16 d'« Ableton Loopback », en CC uniquement.** Vérifié le 2026-09-19 :
-  les CC y sont **entièrement libres** (0 utilisé par le rig, 0 mappage Cmd+M dans
-  le set Funk). Les **notes** du canal 16 sont prises par les déclencheurs FX et
-  drums d'Evy — ne pas y toucher.
-- **Pas de port virtuel.** On se branche sur le port que le Stream Deck utilise
-  déjà (son `GlobalPort_1`). Un port de plus serait un port de plus à configurer
-  dans chaque touche et à perdre quand Bome tombe. Repli sur un port virtuel
-  seulement si « Ableton Loopback » est absent — et la passerelle le **dit**.
-- **Aucune dépendance hors `python-rtmidi`** (déjà installé, 5.0.0). Le codec OSC
-  fait 80 lignes dans `osc.py` : un paquet de moins à réinstaller après une mise à
-  jour de Python.
-- **Le texte ne passe pas en MIDI.** Noms de pistes et de scènes vont dans
-  `state.json`, relu par le JS du Stream Deck avec `io.loadFile` — le motif déjà
-  éprouvé par `songs/loader.js`.
-- **Ré-abonnement toutes les 30 s** : si Live redémarre, les abonnements meurent
-  sans prévenir. C'est idempotent côté AbletonOSC.
+- **One MIDI channel on a port the controller already uses.** No extra virtual port:
+  one more port is one more thing to configure on every key and one more to lose.
+  Falls back to a virtual port only if the named one is missing — and *says so*.
+- **No dependency but `python-rtmidi`.** The OSC codec is 80 lines in `osc.py`: one
+  less package to reinstall after a Python upgrade.
+- **Text cannot travel over MIDI.** Track and scene names go to `state.json`, which
+  the client re-reads.
+- **Re-subscribe every 30 s**: if Live restarts, subscriptions die silently.
+  Re-subscribing is idempotent on the AbletonOSC side.
+- **The bridge owns the reply port and fans out.** AbletonOSC *forces* its reply port
+  and does not answer the source port, so only one process can receive Live's state.
+  The bridge holds it — it serves the show — and relays to other clients.
 
-## Pièges
+## Traps, all of them paid for at least once
 
-- **`start_listen` ET `get` initial** : Live ne diffuse rien tant qu'on n'a pas
-  demandé. Sans le `get`, l'état reste vide jusqu'au premier changement.
-- **Le typage OSC est significatif** : AbletonOSC refuse un tempo entier et un
-  index de piste en float. D'où `$a.0` pour forcer le float.
-- **7 bits** : une valeur > 127 est bornée **et journalisée**, jamais tronquée en
-  silence.
-- **Une ligne de configuration illisible refuse le démarrage** avec le numéro de
-  ligne et le texte fautif. Le silence sur une commande rejetée est ce qui coûte
-  des heures — voir le langage de trevligaspel.
+- **`start_listen` AND an initial `get`**: Live broadcasts nothing until asked.
+  Without the `get`, state stays empty until the first change.
+- **Some addresses accept no subscription** (`track_names`, `scenes/name`):
+  AbletonOSC answers *Unknown OSC address*. Poll them instead.
+- **OSC typing is significant**: AbletonOSC refuses an integer tempo and a float
+  track index. Hence `$a.0` to force a float.
+- **7 bits**: a value above 127 is clamped **and logged**, never silently truncated.
+- **A bad configuration line refuses the *reload*, not the process**: the previous
+  configuration stays live and the error is logged with its line number.
+- **The master track is not in `song.tracks`**, and `tracks[-1]` silently resolves to
+  the *last regular track*. See `patches/`.
 
-## Commandes
+## Working loop
 
 ```bash
-python3 -m oscmidi_bridge --verify          # controle avant concert
-python3 -m oscmidi_bridge                   # au premier plan, pour deboguer
-launchctl bootstrap gui/$(id -u) launchd/com.benoit.oscmidi-bridge.plist
-launchctl bootout   gui/$(id -u)/com.benoit.oscmidi-bridge
+python3 -m oscmidi_bridge --verify    # pre-show check
+python3 -m oscmidi_bridge --ports     # write available MIDI ports into the config
+python3 -m oscmidi_bridge             # foreground, for debugging
 ```
+
+The configuration lives outside this repository — see `_config_par_defaut()`.

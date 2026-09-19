@@ -8,8 +8,8 @@ attribué, unique, dans un canal libre — il n'y a qu'à retirer le « # ».
 Les numéros sont attribués dans un ORDRE D'UTILITÉ (song, view, scene, track, puis
 le reste) pour que ce qui sert tous les jours tombe sur le canal 16, celui dont on a
 vérifié qu'il est entièrement libre. Quand il est plein, on déborde sur 15 puis 14 —
-et l'en-tête le dit, parce que ces deux-là portent des presets Evy inactifs et un
-CC 100 du profil Live : à vérifier avant de décommenter.
+et l'en-tête le dit, parce qu'un canal de débordement n'a PAS été vérifié libre :
+à contrôler avant de décommenter.
 """
 from __future__ import annotations
 
@@ -24,7 +24,9 @@ BASES = {"song.py": "song", "track.py": "track", "clip.py": "clip", "device.py":
          "clip_slot.py": "clip_slot", "scene.py": "scene", "view.py": "view",
          "application.py": "application"}
 # Numéros déjà pris par common.txt sur le canal 16 — on ne les réattribue pas.
-PRIS_16 = set(range(20, 50)) | set(range(60, 96)) | set(range(100, 110))
+# Canal par defaut et canaux de debordement quand il est plein.
+CANAL, DEBORDEMENT = 16, (15, 14)
+DEJA_PRIS = set(range(20, 50)) | set(range(60, 96)) | set(range(100, 110))
 ORDRE = ["song", "view", "scene", "track", "clip", "clip_slot", "device", "application"]
 
 
@@ -58,8 +60,9 @@ def main() -> int:
         print(f"AbletonOSC introuvable : {ABLETONOSC}"); return 2
     adr = sorted(adresses())
     # attribution : canal 16 d'abord (hors numéros déjà pris), puis 15, puis 14
-    libres = [(16, n) for n in range(128) if n not in PRIS_16] \
-           + [(15, n) for n in range(128)] + [(14, n) for n in range(128)]
+    libres = [(CANAL, n) for n in range(128) if n not in DEJA_PRIS]
+    for c in DEBORDEMENT:
+        libres += [(c, n) for n in range(128)]
     it = iter(libres)
 
     par_base: dict[str, list[str]] = {}
@@ -71,9 +74,8 @@ def main() -> int:
 #
 # {len(adr)} adresses. Chacune a déjà son numéro : il n'y a qu'à retirer le « # ».
 #
-# ⚠ Le canal 16 est vérifié libre (0 CC utilisé par le rig, 0 mappage Cmd+M dans le
-#   set Funk). Les canaux 15 et 14, où déborde la fin du catalogue, portent des
-#   presets Evy inactifs et un CC 100 du profil Live : VÉRIFIER avant de décommenter.
+# ⚠ Vérifiez que le canal par défaut est réellement libre chez vous, et surtout les
+#   canaux de débordement : rien ne garantit qu'ils le soient.
 #
 # Conventions :  set/…  → send (la valeur du CC devient l'argument $a)
 #                get/…  → watch (la réponse de Live revient en CC)
@@ -82,7 +84,7 @@ def main() -> int:
 #   argument : $track et $scene valent la sélection courante, observée par la passerelle.
 
 group   catalogue
-channel 16         # canal par defaut : les lignes du canal 16 ne le repetent pas
+channel {CANAL}         # canal par defaut : les lignes de ce canal ne le repetent pas
 target  127.0.0.1:11000 -> 11001
 """]
 
@@ -94,7 +96,7 @@ target  127.0.0.1:11000 -> 11001
             canal, num = next(it)
             # Le canal n'est écrit QUE s'il diffère du canal par défaut : une ligne
             # sur le canal 16 s'écrit « send cc 42 /… », sans le répéter.
-            ch = "" if canal == 16 else f"{canal} "
+            ch = "" if canal == CANAL else f"{canal} "
             index = "$track " if base == "track" else "$scene " if base == "scene" else ""
             if "/set/" in a:
                 lignes.append(f"# send  cc {ch}{num:<3} {a} {index}$a")

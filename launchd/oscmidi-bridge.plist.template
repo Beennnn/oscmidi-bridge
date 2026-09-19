@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>              <string>dev.oscmidi.bridge</string>
+  <!-- Interpreteur FIGE : celui qui a python-rtmidi. Sur macOS le python
+       systeme (/usr/bin/python3) ne l'a PAS, et le service meurt au demarrage. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PYTHON__</string>
+    <string>-m</string>
+    <string>oscmidi_bridge</string>
+    <!-- Chemin de VOTRE configuration. Le depot ne porte que le moteur. -->
+    <string>__CONFIG__</string>
+  </array>
+  <key>WorkingDirectory</key>   <string>__REPO__</string>
+  <!-- KeepAlive : la passerelle doit survivre a un redemarrage de Bome ou de Live.
+       Elle ne fait rien de destructeur au demarrage, la relancer est sans risque. -->
+  <key>KeepAlive</key>          <true/>
+  <key>RunAtLoad</key>          <true/>
+  <key>ThrottleInterval</key>   <integer>10</integer>
+  <key>StandardOutPath</key>    <string>__REPO__/bridge.log</string>
+  <key>StandardErrorPath</key>  <string>__REPO__/bridge.log</string>
+</dict>
+</plist>

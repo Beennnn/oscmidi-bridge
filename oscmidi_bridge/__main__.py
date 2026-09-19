@@ -17,10 +17,10 @@ RACINE = Path(__file__).resolve().parent.parent
 
 
 def _config_par_defaut() -> Path:
-    """Où trouver la configuration, dans l'ordre.
+    """Where to look for the configuration, in order.
 
-    Elle ne vit PAS dans ce dépôt : elle décrit un rig précis — numéros de CC,
-    index de pistes, ports — alors que le moteur, lui, est public et générique.
+    It does NOT live in this repository: it describes one specific rig — CC
+    numbers, track indices, ports — whereas the engine is generic.
     """
     import os
     if os.environ.get("OSCMIDI_CONFIG"):
@@ -30,32 +30,32 @@ def _config_par_defaut() -> Path:
 
 
 def journal(*a):
-    print(*a, flush=True)   # launchd redirige stdout vers le fichier de log
+    print(*a, flush=True)   # the service manager redirects stdout to the log file
 
 
 def main(argv: list[str]) -> int:
     args = [a for a in argv[1:] if not a.startswith("--")]
     verify = "--verify" in argv
     ports = "--ports" in argv
-    chemin = Path(args[0]) if args else _config_par_defaut()
-    if not chemin.exists():
-        journal(f"configuration introuvable : {chemin}")
+    path_ = Path(args[0]) if args else _config_par_defaut()
+    if not path_.exists():
+        journal(f"configuration not found: {path_}")
         return 2
     if ports:
-        # On inscrit la liste DANS le fichier plutôt que de la montrer : le nom exact
-        # d'un port MIDI ne se retient pas, et le recopier à la main est une source
-        # de fautes. Il n'y a qu'à décommenter celui qu'on veut.
-        for l in inscrire_ports(chemin):
+        # We write the list INTO the file rather than just printing it: nobody
+        # remembers the exact name of a MIDI port, and retyping one is a source of
+        # mistakes. Just uncomment the one you want.
+        for l in inscrire_ports(path_):
             journal(l)
         return 0
     try:
-        m = load(chemin)
+        m = load(path_)
     except ValueError as e:
-        journal(f"configuration refusée —\n{e}")
+        journal(f"configuration rejected —\n{e}")
         return 2
 
-    journal(f"groupe « {m.group} » · {len(m.sends)} commandes · {len(m.verbs)} gestes · "
-            f"{len(m.watches)} retours · {len(m.texts)} textes · {chemin.name}")
+    journal(f"group '{m.group}' · {len(m.sends)} commands · {len(m.verbs)} gestures · "
+            f"{len(m.watches)} feedbacks · {len(m.texts)} texts · {path_.name}")
     if verify:
         for s in m.sends:
             journal(f"  {s.kind} {s.channel:>2} {s.number:>3}  ->  {s.address} {s.args}")
@@ -65,11 +65,11 @@ def main(argv: list[str]) -> int:
             journal(f"  {w.address}[{w.arg}]  ->  {w.kind} {w.channel} {w.number}")
         return 0
 
-    b = Bridge(m, RACINE / "state.json", journal, m.port, chemin)
+    b = Bridge(m, RACINE / "state.json", journal, m.port, path_)
     signal.signal(signal.SIGTERM, lambda *_: b.stop())
     signal.signal(signal.SIGINT, lambda *_: b.stop())
     b.run()
-    journal("arrêt")
+    journal("stopped")
     return 0
 
 
