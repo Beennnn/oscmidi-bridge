@@ -116,6 +116,11 @@ class Text:
 @dataclass
 class Mapping:
     group: str = "common"
+    # Port MIDI et canal par défaut : écrits une fois en tête de fichier plutôt que
+    # répétés sur chaque ligne. `python3 -m oscmidi_bridge --ports` inscrit dans le
+    # fichier la liste des ports réellement présents, il n'y a qu'à décommenter.
+    port: str = "Ableton Loopback"
+    channel: int = 16
     host: str = "127.0.0.1"
     send_port: int = 11000
     recv_port: int = 11001
@@ -153,15 +158,28 @@ def load(path: Path, _vus: set[Path] | None = None) -> Mapping:
                     m.verbs += sous.verbs
                     m.watches += sous.watches
                     m.texts += sous.texts
+                case "port":
+                    # le nom peut contenir des espaces : tout ce qui suit le mot-clé
+                    m.port = " ".join(mots[1:]).strip('"')
+                case "channel":
+                    c = int(mots[1])
+                    if not 1 <= c <= 16:
+                        raise ValueError("canal MIDI hors 1-16")
+                    m.channel = c
                 case "target":
                     c = _CIBLE.match(" ".join(mots[1:]))
                     if not c:
                         raise ValueError("attendu  target 127.0.0.1:11000 -> 11001")
                     m.host, m.send_port, m.recv_port = c.group(1), int(c.group(2)), int(c.group(3))
                 case "send":
-                    # send <cc|note> <canal> <numero> [transfo] <adresse> [args…]
-                    kind, canal, num = mots[1], int(mots[2]), int(mots[3])
-                    reste = mots[4:]
+                    # send <cc|note> [canal] <numero> [transfo] <adresse> [args…]
+                    # Le canal est FACULTATIF : sans lui, celui de `channel`. On le
+                    # reconnaît sans ambiguïté — une adresse commence toujours par /.
+                    implicite = mots[3].startswith("/") or mots[3].startswith("$v")
+                    kind = mots[1]
+                    canal = m.channel if implicite else int(mots[2])
+                    num = int(mots[2]) if implicite else int(mots[3])
+                    reste = mots[3:] if implicite else mots[4:]
                     tr = None
                     if reste and reste[0].startswith("$v"):
                         tr = parse_transfo(reste[0])
@@ -169,18 +187,27 @@ def load(path: Path, _vus: set[Path] | None = None) -> Mapping:
                     m.sends.append(Send(kind, canal, num, reste[0],
                                         [literal(t) for t in reste[1:]], tr, ou))
                 case "verb":
-                    # verb <cc|note> <canal> <numero> <nom du geste>
+                    # verb <cc|note> [canal] <numero> <nom du geste>
                     from .verbs import VERBES
-                    nom = mots[4]
+                    implicite = len(mots) == 4
+                    canal_v = m.channel if implicite else int(mots[2])
+                    num_v = int(mots[2]) if implicite else int(mots[3])
+                    nom = mots[3] if implicite else mots[4]
                     if nom not in VERBES:
                         raise ValueError(f"geste inconnu : {nom!r} — connus : {', '.join(sorted(VERBES))}")
-                    m.verbs.append(Verb(mots[1], int(mots[2]), int(mots[3]), nom, ou))
+                    m.verbs.append(Verb(mots[1], canal_v, num_v, nom, ou))
                 case "watch":
                     # watch <adresse> <rang arg> -> <cc|note> <canal> <numero> [transfo]
                     i = mots.index("->")
                     adresse, rang = mots[1], int(mots[2])
-                    kind, canal, num = mots[i + 1], int(mots[i + 2]), int(mots[i + 3])
-                    tr = parse_transfo(mots[i + 4]) if len(mots) > i + 4 else None
+                    # watch <adresse> <rang> -> <cc|note> [canal] <numero> [transfo]
+                    suite = mots[i + 1:]
+                    impl = len(suite) < 3 or not suite[2].lstrip("-").isdigit()
+                    kind = suite[0]
+                    canal = m.channel if impl else int(suite[1])
+                    num = int(suite[1]) if impl else int(suite[2])
+                    reste_w = suite[2:] if impl else suite[3:]
+                    tr = parse_transfo(reste_w[0]) if reste_w else None
                     m.watches.append(Watch(adresse, rang, kind, canal, num, tr, ou))
                 case "text":
                     i = mots.index("->")

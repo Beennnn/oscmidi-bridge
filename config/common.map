@@ -14,6 +14,30 @@
 #   [(cc:16,100,*){@LivePlay:#@e_ccvalue#}]
 
 group   common
+
+# ┌── PORTS MIDI ─ inscrit par --ports le 2026-09-19 20:23 ──────────────────────
+#   Le port actif est la ligne « port » non commentée ci-dessous.
+#   Pour en changer : commenter celle-là, décommenter une autre.
+#   Seuls les ports disponibles EN ENTRÉE ET EN SORTIE sont listés.
+port    Ableton Loopback
+# port    Daw2Mackie
+# port    Daw2MackieB
+# port    MPE loopback
+# port    Mackie2Daw
+# port    Mackie2XR18
+# port    MackieB2Daw
+# port    NetDevices
+# port    P√©riph√©rique MIDI USB Port 1
+# port    P√©riph√©rique MIDI USB Port 2
+# port    RME Fireface UCX
+# port    R√©seau Session 1
+# port    XR182Mackie
+# port    rig-alert
+#
+#   Canal par défaut : les lignes send/verb/watch peuvent alors
+#   omettre le canal (« send cc 20 /live/song/start_playing »).
+channel 16
+# └── fin des ports ────────────────────────────────────────────────────────
 target  127.0.0.1:11000 -> 11001
 
 
