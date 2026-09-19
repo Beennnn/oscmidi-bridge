@@ -1,15 +1,15 @@
-# Exemple minimal — à copier ailleurs et à adapter.
+# Minimal example — copy it elsewhere and adapt it.
 #
-# La configuration réelle d'un rig ne vit PAS dans ce dépôt : elle décrit des
-# numéros de CC, des index de pistes et des ports propres à une installation.
-# Pointer la passerelle vers la sienne avec la variable OSCMIDI_CONFIG.
+# A real rig's configuration does NOT live in this repository: it describes CC
+# numbers, track indices and ports specific to one installation. Point the bridge
+# at yours with the OSCMIDI_CONFIG environment variable.
 
-group   exemple
+group   example
 port    Ableton Loopback
 channel 16
 target  127.0.0.1:11000 -> 11001
 
-# ── commandes : MIDI entrant → OSC ──────────────────────────────────────────
+# ── commands: incoming MIDI → OSC ───────────────────────────────────────────
 send  cc 20   /live/song/start_playing
 send  cc 21   /live/song/stop_playing
 send  cc 24   /live/song/tap_tempo
@@ -17,15 +17,15 @@ send  cc 25   $v+50   /live/song/set/tempo $a.0     # 0-127 → 50-177 bpm
 send  cc 30   /live/view/set/selected_scene $a
 send  cc 31   /live/scene/fire_selected
 
-# ── gestes : calculés sur l'état observé ────────────────────────────────────
+# ── gestures: computed from the observed state ──────────────────────────────
 verb  cc 60   scene.prev
 verb  cc 61   scene.next
 verb  cc 80   transport.toggle
 
-# ── retour d'état : OSC → MIDI ──────────────────────────────────────────────
+# ── feedback: OSC → MIDI ────────────────────────────────────────────────────
 watch /live/song/get/is_playing      0  ->  cc 100
 watch /live/view/get/selected_scene  0  ->  cc 101
 watch /live/song/get/tempo           0  ->  cc 102  $v-50
 
-# Ce que le MIDI ne peut pas porter va dans state.json.
+# What MIDI cannot carry goes to state.json.
 text  /live/song/get/track_names  ->  tracks

@@ -1,76 +1,117 @@
+![oscmidi-bridge](docs/banner.png)
+
 # oscmidi-bridge
 
-**Une passerelle OSC ↔ MIDI entre Ableton Live et un rig de scène.** Les touches et
-molettes envoient du MIDI comme avant ; Live répond, et **l'état revient** — ce que
-le MIDI seul n'a jamais su faire.
+**An OSC ↔ MIDI bridge between a stage rig and Ableton Live.** Your keys and knobs
+keep sending MIDI exactly as before — and Live now **answers**, so the controller
+can show what Live is actually doing instead of firing into the dark.
 
-> Pensée pour un rig live : elle n'est **jamais nécessaire pour jouer**. Aucune note,
-> aucun son, aucune zone n'y transite. Si elle tombe en concert, le rig continue et
-> seul le retour d'état gèle.
+> **Never required to play.** No note, no sound, no keyboard zone goes through it.
+> If it dies mid-show, the rig keeps playing — only the feedback freezes. That is a
+> design rule, not an accident, and it shapes every decision below.
 
-## Ce qu'elle fait
+---
+
+## Where it sits in the chain
 
 ```
-  Stream Deck ──MIDI canal 16──►  passerelle  ──OSC──►  AbletonOSC ──► Live
-                                      ▲                                  │
-       touches allumées ◄──MIDI CC────┴──────────OSC (état)◄─────────────┘
-       noms de pistes  ◄──state.json──┘
+   controller  ──MIDI──►  oscmidi-bridge  ──OSC──►  AbletonOSC  ──►  Ableton Live
+   keys, dials                  ▲                                          │
+                                │                                          │
+   lit keys ◄──MIDI CC──────────┤                                          │
+   names    ◄──state.json───────┴──────────────OSC (state) ◄───────────────┘
 ```
 
-- **commandes** : un CC entrant devient un message OSC, avec un typage explicite
-  (`12` entier, `12.0` float, `"x"` chaîne) — AbletonOSC refuse un index de piste
-  envoyé en float ;
-- **gestes** : ce qu'une adresse seule ne sait pas faire — solo exclusif, scène
-  suivante, bascule lecture/arrêt — calculés sur l'état observé ;
-- **retour d'état** : les valeurs de Live repartent en CC, avec un débit limitable
-  (`every 120ms`) indispensable pour les VU-mètres ;
-- **textes** : ce que le MIDI ne peut pas porter (noms de pistes et de scènes) part
-  dans un `state.json` que le client relit.
+It does **not** replace your MIDI setup — it sits beside it. Notes, sounds and
+anything that must be instantaneous keep their existing path. The bridge only
+carries what benefits from a round trip: transport, scenes, track state, tempo.
 
-## Installer
+## Why it exists
+
+A controller talking to Live has three options, and each costs something:
+
+| | what it costs |
+| --- | --- |
+| **MIDI + manual mapping** | the mappings live **inside the set** — redone for every project — and MIDI carries **no feedback** |
+| **Ableton's own User Remote Script** | global and does send feedback, but the official template has **no Session section** — no scene selection, no scene launch |
+| **Generic control-surface scripts** | often unmaintained, and they claim a whole MIDI channel for a handful of functions |
+
+[AbletonOSC](https://github.com/ideoforms/AbletonOSC) mirrors Live's own object
+model rather than a hand-picked list of functions, so it ages with Live instead of
+against it. This bridge is what lets a MIDI rig speak to it without rewriting the
+rig.
+
+## What it does
+
+- **commands** — an incoming CC becomes an OSC message, with explicit typing
+  (`12` int, `12.0` float, `"x"` string): AbletonOSC refuses a float track index;
+- **gestures** — what a single address cannot express: exclusive solo, next scene,
+  toggle playback — computed from the observed state;
+- **feedback** — Live's values go back out as CC, with optional rate limiting
+  (`every 120ms`), which is what makes VU meters survivable;
+- **text** — what MIDI cannot carry (track and scene names) lands in a `state.json`
+  the client re-reads;
+- **hot reload** — edit, save, done. A syntax error **does not stop the bridge**:
+  the previous configuration stays live and the error is logged with its line
+  number. Editing during a rehearsal cannot cut the feedback mid-song.
+
+## Install
 
 ```bash
-pip install python-rtmidi            # seule dépendance
-python3 -m oscmidi_bridge --ports    # inscrit les ports MIDI dans la configuration
-python3 -m oscmidi_bridge --verify   # contrôle avant concert
-python3 -m oscmidi_bridge            # au premier plan
+pip install python-rtmidi            # the only dependency
+python3 -m oscmidi_bridge --ports    # writes the available MIDI ports into the config
+python3 -m oscmidi_bridge --verify   # pre-show check
+python3 -m oscmidi_bridge            # run it
 ```
 
-Côté Live : [AbletonOSC](https://github.com/ideoforms/AbletonOSC) dans un emplacement
-de Control Surface. Rien à régler par set, par piste ou par clip.
+On the Live side: [AbletonOSC](https://github.com/ideoforms/AbletonOSC) in a Control
+Surface slot. Nothing to set per set, per track or per clip.
 
-## La configuration
+To run it as a background service, `launchd/oscmidi-bridge.plist.template` has the
+three placeholders to fill in.
 
-Un fichier texte, une instruction par ligne, aucune imbrication, `#` commente jusqu'à
-la fin de la ligne. Voir [`examples/common.txt`](examples/common.txt).
+## The configuration
+
+A text file. One statement per line, no nesting, indentation is cosmetic, `#`
+comments to end of line. See [`examples/common.txt`](examples/common.txt).
 
 ```sh
 channel 16
 send  cc 24   /live/song/tap_tempo
-send  cc 25   $v+50   /live/song/set/tempo $a.0
+send  cc 25   $v+50   /live/song/set/tempo $a.0     # 0-127 → 50-177 bpm
 verb  cc 61   scene.next
 watch /live/song/get/is_playing  0  ->  cc 100
+watch /live/track/get/output_meter_level 0 -> cc 110  every 120ms
 text  /live/song/get/track_names    ->  tracks
 ```
 
-Elle est **rechargée à chaud** : éditer et sauver suffit. Et une faute de syntaxe
-**ne coupe pas** la passerelle — l'ancienne configuration reste en place, l'erreur est
-journalisée avec son numéro de ligne et le texte fautif. Éditer pendant une répétition
-ne peut donc pas couper le retour d'état au milieu d'un morceau.
+`$a` is the incoming CC value, `$track` and `$scene` the current selection —
+which is how "the selected track", a notion AbletonOSC does not have, becomes
+expressible.
 
-La configuration d'un rig réel ne vit pas dans ce dépôt : elle décrit une installation
-précise. La passerelle la cherche via `OSCMIDI_CONFIG`, puis
-`~/dev/music/rig-config/oscmidi/common.txt`, puis l'exemple livré.
+A real rig's configuration does not belong in this repository: it describes one
+installation. The bridge looks for it via `OSCMIDI_CONFIG`, then a conventional
+path, then the bundled example.
 
-## Faire cohabiter plusieurs clients OSC
+## Running several OSC clients at once
 
-AbletonOSC **force** son port de réponse à 11001 et ne répond pas au port source :
-un seul processus peut recevoir l'état de Live. La passerelle le détient — c'est elle
-qui sert le concert — et redistribue à qui veut :
+AbletonOSC **forces** its reply port and does not answer the source port, so only
+one process can receive Live's state. The bridge holds it — it is the one serving
+the show — and relays to anyone else:
 
 ```sh
-fanout  127.0.0.1:11101      # par exemple un serveur MCP
+fanout  127.0.0.1:11101      # e.g. an MCP server, a monitor, a second tool
 ```
+
+A client that is not listening never breaks anything.
+
+## Tools
+
+| | |
+| --- | --- |
+| `tools/gen_catalogue.py` | writes **every** address of the installed AbletonOSC as commented, pre-numbered lines — you uncomment instead of writing |
+| `tools/gen_stc_map.py` | translates the Selected Track Control dialect, keeping its own note and CC numbers, so it can be swapped out without touching the controller |
+| `patches/` | a small AbletonOSC patch making the master track addressable ([upstream PR](https://github.com/ideoforms/AbletonOSC/pull/218)) |
 
 ## Licence
 

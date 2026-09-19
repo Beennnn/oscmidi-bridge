@@ -1,11 +1,11 @@
-"""Codec OSC 1.0, sans dépendance.
+"""OSC 1.0 codec, no dependencies.
 
-Pourquoi ne pas prendre python-osc : la passerelle tourne en permanence sous
-launchd, à côté d'un rig de concert. Chaque paquet installé est une chose qui
-peut manquer après une mise à jour de Python ou une réinstallation de la machine.
-OSC tient en quatre-vingts lignes ; on les écrit une fois.
+Why not python-osc: this bridge runs permanently under a service manager, next
+to a live rig. Every installed package is one more thing that can go missing
+after a Python upgrade or a machine rebuild. OSC fits in eighty lines; write
+them once.
 
-Types couverts : i f s T F N b — ceux qu'AbletonOSC utilise réellement.
+Types covered: i f s T F N b — the ones AbletonOSC actually uses.
 """
 
 from __future__ import annotations
@@ -15,41 +15,41 @@ from typing import Any
 
 
 def _pad4(n: int) -> int:
-    """Longueur alignée sur le multiple de 4 supérieur (règle de bourrage OSC)."""
+    """Round up to the next multiple of 4 (OSC padding rule)."""
     return (n + 3) & ~3
 
 
 def _enc_str(s: str) -> bytes:
     raw = s.encode("utf-8")
-    # une chaîne OSC se termine par AU MOINS un octet nul puis est complétée à un
-    # multiple de 4 : "abc" fait 4 octets, "abcd" en fait 8.
+    # An OSC string ends with AT LEAST one null byte, then is padded to a multiple
+    # of 4: "abc" takes 4 bytes, "abcd" takes 8.
     return raw + b"\0" * (_pad4(len(raw) + 1) - len(raw))
 
 
 def encode(address: str, args: list[Any] | tuple[Any, ...] = ()) -> bytes:
     tags = ","
-    corps = b""
+    body = b""
     for a in args:
         if isinstance(a, bool):
-            # T et F ne portent PAS de charge utile : le type EST la valeur.
+            # T and F carry NO payload: the type tag IS the value.
             tags += "T" if a else "F"
         elif isinstance(a, int):
             tags += "i"
-            corps += struct.pack(">i", a)
+            body += struct.pack(">i", a)
         elif isinstance(a, float):
             tags += "f"
-            corps += struct.pack(">f", a)
+            body += struct.pack(">f", a)
         elif isinstance(a, str):
             tags += "s"
-            corps += _enc_str(a)
+            body += _enc_str(a)
         elif a is None:
             tags += "N"
         elif isinstance(a, (bytes, bytearray)):
             tags += "b"
-            corps += struct.pack(">i", len(a)) + bytes(a) + b"\0" * (_pad4(len(a)) - len(a))
+            body += struct.pack(">i", len(a)) + bytes(a) + b"\0" * (_pad4(len(a)) - len(a))
         else:
-            raise TypeError(f"type OSC non pris en charge : {type(a).__name__}")
-    return _enc_str(address) + _enc_str(tags) + corps
+            raise TypeError(f"unsupported OSC type: {type(a).__name__}")
+    return _enc_str(address) + _enc_str(tags) + body
 
 
 def _dec_str(buf: bytes, off: int) -> tuple[str, int]:
@@ -58,15 +58,15 @@ def _dec_str(buf: bytes, off: int) -> tuple[str, int]:
 
 
 def decode(buf: bytes) -> tuple[str, list[Any]] | None:
-    """Rend (adresse, arguments), ou None si le paquet est illisible.
+    """Return (address, args), or None if the packet is unreadable.
 
-    On rend None plutôt que de lever : un datagramme mal formé pendant un concert
-    ne doit pas arrêter la passerelle.
+    Returning None rather than raising is deliberate: a malformed datagram during
+    a show must not take the bridge down.
     """
     try:
         if not buf or buf[0:1] != b"/":
             return None
-        adresse, off = _dec_str(buf, 0)
+        address, off = _dec_str(buf, 0)
         tags, off = _dec_str(buf, off)
         if not tags.startswith(","):
             return None
@@ -88,8 +88,8 @@ def decode(buf: bytes) -> tuple[str, list[Any]] | None:
             elif t == "N":
                 args.append(None)
             else:
-                # type inconnu : on ignore de combien avancer, on rend ce qu'on a.
-                return adresse, args
-        return adresse, args
+                # Unknown type: we don't know how far to advance, so return what we have.
+                return address, args
+        return address, args
     except Exception:
         return None

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e1116"/><stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b949e"/>
+    </marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3fb950"/>
+    </marker>
+  </defs>
+  <rect width="1280" height="400" fill="url(#bg)"/>
+  <text x="80" y="92" font-family="Helvetica,Arial" font-size="46" font-weight="bold" fill="#e6edf3">oscmidi-bridge</text>
+  <text x="80" y="128" font-family="Helvetica,Arial" font-size="20" fill="#8b949e">OSC ↔ MIDI — your stage rig talks to Ableton Live, and Live answers back</text>
+
+  <g font-family="Helvetica,Arial" font-size="16">
+    <rect x="80"  y="196" width="210" height="72" rx="10" fill="#1c2128" stroke="#30363d" stroke-width="2"/>
+    <text x="185" y="228" fill="#e6edf3" text-anchor="middle" font-size="17">controller</text>
+    <text x="185" y="250" fill="#8b949e" text-anchor="middle" font-size="13">keys · dials · pedals</text>
+
+    <rect x="450" y="188" width="240" height="88" rx="10" fill="#132a1b" stroke="#3fb950" stroke-width="2"/>
+    <text x="570" y="220" fill="#7ee787" text-anchor="middle" font-size="18" font-weight="bold">oscmidi-bridge</text>
+    <text x="570" y="243" fill="#8b949e" text-anchor="middle" font-size="13">commands · gestures</text>
+    <text x="570" y="261" fill="#8b949e" text-anchor="middle" font-size="13">state · rate limiting</text>
+
+    <rect x="850" y="196" width="210" height="72" rx="10" fill="#1c2128" stroke="#30363d" stroke-width="2"/>
+    <text x="955" y="228" fill="#e6edf3" text-anchor="middle" font-size="17">Ableton Live</text>
+    <text x="955" y="250" fill="#8b949e" text-anchor="middle" font-size="13">via AbletonOSC</text>
+
+    <path d="M296 218 L444 218" stroke="#8b949e" stroke-width="2.5" marker-end="url(#a)"/>
+    <text x="370" y="208" fill="#8b949e" text-anchor="middle" font-size="13">MIDI</text>
+    <path d="M696 218 L844 218" stroke="#8b949e" stroke-width="2.5" marker-end="url(#a)"/>
+    <text x="770" y="208" fill="#8b949e" text-anchor="middle" font-size="13">OSC</text>
+
+    <path d="M844 252 L696 252" stroke="#3fb950" stroke-width="2.5" marker-end="url(#b)"/>
+    <text x="770" y="272" fill="#3fb950" text-anchor="middle" font-size="13">state</text>
+    <path d="M444 252 L296 252" stroke="#3fb950" stroke-width="2.5" marker-end="url(#b)"/>
+    <text x="370" y="272" fill="#3fb950" text-anchor="middle" font-size="13">lit keys</text>
+  </g>
+
+  <text x="80" y="342" font-family="Helvetica,Arial" font-size="15" fill="#8b949e">Never required to play: no note, no sound, no zone goes through it.</text>
+  <text x="80" y="366" font-family="Helvetica,Arial" font-size="15" fill="#8b949e">If it dies mid-show, the rig keeps playing — only the feedback freezes.</text>
+</svg>

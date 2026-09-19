@@ -1,7 +1,7 @@
-"""Point d'entrée : `python3 -m oscmidi_bridge [fichier.txt] [--verify]`.
+"""Entry point: `python3 -m oscmidi_bridge [file.txt] [--verify]`.
 
-`--verify` charge la configuration, affiche ce qu'elle déclare et sort — à passer
-AVANT le concert plutôt que de découvrir une faute de frappe sur scène.
+`--verify` loads the configuration, prints what it declares and exits — to be run
+BEFORE the show rather than discovering a typo on stage.
 """
 from __future__ import annotations
 
@@ -11,51 +11,51 @@ from pathlib import Path
 
 from .bridge import Bridge
 from .mapping import load
-from .ports import inscrire_ports
+from .ports import write_ports
 
-RACINE = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent
 
 
-def _config_par_defaut() -> Path:
-    """Où trouver la configuration, dans l'ordre.
+def _default_config() -> Path:
+    """Where to look for the configuration, in order.
 
-    Elle ne vit PAS dans ce dépôt : elle décrit un rig précis — numéros de CC,
-    index de pistes, ports — alors que le moteur, lui, est public et générique.
+    It does NOT live in this repository: it describes one specific rig — CC
+    numbers, track indices, ports — whereas the engine is generic.
     """
     import os
     if os.environ.get("OSCMIDI_CONFIG"):
         return Path(os.environ["OSCMIDI_CONFIG"]).expanduser()
-    rig = Path.home() / "dev/music/rig-config/oscmidi/common.txt"
-    return rig if rig.exists() else RACINE / "examples" / "common.txt"
+    rig = Path.home() / ".config/oscmidi/common.txt"
+    return rig if rig.exists() else ROOT / "examples" / "common.txt"
 
 
 def journal(*a):
-    print(*a, flush=True)   # launchd redirige stdout vers le fichier de log
+    print(*a, flush=True)   # the service manager redirects stdout to the log file
 
 
 def main(argv: list[str]) -> int:
     args = [a for a in argv[1:] if not a.startswith("--")]
     verify = "--verify" in argv
     ports = "--ports" in argv
-    chemin = Path(args[0]) if args else _config_par_defaut()
-    if not chemin.exists():
-        journal(f"configuration introuvable : {chemin}")
+    path_ = Path(args[0]) if args else _default_config()
+    if not path_.exists():
+        journal(f"configuration not found: {path_}")
         return 2
     if ports:
-        # On inscrit la liste DANS le fichier plutôt que de la montrer : le nom exact
-        # d'un port MIDI ne se retient pas, et le recopier à la main est une source
-        # de fautes. Il n'y a qu'à décommenter celui qu'on veut.
-        for l in inscrire_ports(chemin):
+        # We write the list INTO the file rather than just printing it: nobody
+        # remembers the exact name of a MIDI port, and retyping one is a source of
+        # mistakes. Just uncomment the one you want.
+        for l in write_ports(path_):
             journal(l)
         return 0
     try:
-        m = load(chemin)
+        m = load(path_)
     except ValueError as e:
-        journal(f"configuration refusée —\n{e}")
+        journal(f"configuration rejected —\n{e}")
         return 2
 
-    journal(f"groupe « {m.group} » · {len(m.sends)} commandes · {len(m.verbs)} gestes · "
-            f"{len(m.watches)} retours · {len(m.texts)} textes · {chemin.name}")
+    journal(f"group '{m.group}' · {len(m.sends)} commands · {len(m.verbs)} gestures · "
+            f"{len(m.watches)} feedbacks · {len(m.texts)} texts · {path_.name}")
     if verify:
         for s in m.sends:
             journal(f"  {s.kind} {s.channel:>2} {s.number:>3}  ->  {s.address} {s.args}")
@@ -65,11 +65,11 @@ def main(argv: list[str]) -> int:
             journal(f"  {w.address}[{w.arg}]  ->  {w.kind} {w.channel} {w.number}")
         return 0
 
-    b = Bridge(m, RACINE / "state.json", journal, m.port, chemin)
+    b = Bridge(m, ROOT / "state.json", journal, m.port, path_)
     signal.signal(signal.SIGTERM, lambda *_: b.stop())
     signal.signal(signal.SIGINT, lambda *_: b.stop())
     b.run()
-    journal("arrêt")
+    journal("stopped")
     return 0
 
 
