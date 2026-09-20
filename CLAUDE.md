@@ -33,9 +33,14 @@ is to be refused.
   AbletonOSC answers *Unknown OSC address*. Poll them instead.
 - **OSC typing is significant**: AbletonOSC refuses an integer tempo and a float
   track index. Hence `$a.0` to force a float.
-- **Program Change is TWO bytes.** The early `len(message) < 3` guard dropped
-  every one of them before the type was even looked at. The program number is the
-  whole message, so it is also the value — which is what makes `pc *` meaningful.
+- **Message types differ on three points, all of them quiet when wrong**: length
+  (Program Change and channel pressure are two bytes — an early `len < 3` guard
+  dropped every one of them), whether there is a number to address at all
+  (channel pressure and pitch bend have none), and value width (bend is 14 bits,
+  little end first; read as one byte it looks like the wheel jumps mid-travel).
+  All three live in `midi.py`, in one table, and nowhere else.
+- **An unknown message type is refused at PARSE time**, by `--verify`. A typo
+  would otherwise match nothing and say nothing for a whole show.
 - **7 bits**: a value above 127 is clamped **and logged**, never silently truncated.
 - **A bad configuration line refuses the *reload*, not the process**: the previous
   configuration stays live and the error is logged with its line number.

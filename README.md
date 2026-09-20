@@ -45,9 +45,14 @@ rig.
 
 - **commands** — an incoming CC becomes an OSC message, with explicit typing
   (`12` int, `12.0` float, `"x"` string): AbletonOSC refuses a float track index;
-- **program change** — a pedalboard's program number selects directly (`send pc *`,
-  where `$a` is the number that arrived: one line covers all 128), and Live's own
-  values leave as Program Change, which amp modellers and organ modules speak;
+- **every channel-voice message** — `note`, `noteoff`, `poly`, `cc`, `pc`, `touch`
+  (channel pressure) and `bend` (14-bit), in and out. A number written `*` matches
+  whatever arrives and becomes `$a`, so one `send pc *` line covers all 128
+  programs — and a `watch` landing on `pc` sends Live's scene index to an amp
+  modeller as a preset change, with nothing to map on its side;
+- **several ports** — `port` and `channel` apply to the lines that follow them, so
+  a pedalboard, an amp and the DAW loopback stay distinct even when all three
+  speak on channel 1;
 - **gestures** — what a single address cannot express: exclusive solo, next scene,
   toggle playback — computed from the observed state;
 - **feedback** — Live's values go back out as CC, with optional rate limiting

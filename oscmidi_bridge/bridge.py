@@ -16,7 +16,7 @@ from pathlib import Path
 
 import rtmidi
 
-from . import osc
+from . import midi, osc
 from .mapping import ANY, Mapping
 from .verbs import GESTURES
 
@@ -50,8 +50,8 @@ class Bridge:
         self.state: dict[str, object] = {}
         self._stop = threading.Event()
         # indexed mappings, so we do not scan lists on every message
-        self._sends = {(s.kind, s.channel, s.number): s for s in m.sends}
-        self._verbs = {(v.kind, v.channel, v.number): v for v in m.verbs}
+        self._sends = {(s.port, s.kind, s.channel, s.number): s for s in m.sends}
+        self._verbs = {(v.port, v.kind, v.channel, v.number): v for v in m.verbs}
         self._watches: dict[str, list] = {}
         for w in m.watches:
             self._watches.setdefault(w.address, []).append(w)
@@ -66,7 +66,7 @@ class Bridge:
         # monitoring path that silently reverts is discovered on stage.
         self._live_seen = False
         self._last_reply = 0.0
-        self._triggers = {(t.kind, t.channel, t.number): t for t in m.triggers}
+        self._triggers = {(t.port, t.kind, t.channel, t.number): t for t in m.triggers}
 
     # ── hot reload ──────────────────────────────────────────────────────────
     def _fingerprint(self) -> float:
@@ -84,14 +84,14 @@ class Bridge:
             return 0.0
 
     def _reindex(self) -> None:
-        self._sends = {(x.kind, x.channel, x.number): x for x in self.m.sends}
-        self._verbs = {(v.kind, v.channel, v.number): v for v in self.m.verbs}
+        self._sends = {(x.port, x.kind, x.channel, x.number): x for x in self.m.sends}
+        self._verbs = {(v.port, v.kind, v.channel, v.number): v for v in self.m.verbs}
         self._watches, self._texts = {}, {}
         for w in self.m.watches:
             self._watches.setdefault(w.address, []).append(w)
         for t in self.m.texts:
             self._texts.setdefault(t.address, []).append(t)
-        self._triggers = {(t.kind, t.channel, t.number): t for t in self.m.triggers}
+        self._triggers = {(t.port, t.kind, t.channel, t.number): t for t in self.m.triggers}
 
     def _reload(self) -> None:
         """Re-read the configuration without restarting.
@@ -121,22 +121,48 @@ class Bridge:
         return None
 
     def _open_midi(self):
-        self.midi_in = rtmidi.MidiIn()
-        self.midi_out = rtmidi.MidiOut()
-        i_in = self._find_port(self.midi_in.get_ports(), self.port_name)
-        i_out = self._find_port(self.midi_out.get_ports(), self.port_name)
+        """Open every port the configuration names, not just one.
+
+        A rig separates its gear by PORT as much as by channel: the pedalboard,
+        the amp modeller and the DAW loopback are three cables, and all three may
+        speak on channel 1 without meaning the same thing. Opening one port per
+        distinct name keeps them apart, and a line's port is part of its address.
+        """
+        self._ins: dict[str, object] = {}
+        self._outs: dict[str, object] = {}
+        for name in self._ports_used():
+            self._open_one(name)
+        self.midi_in = self._ins.get(self.port_name)      # kept for compatibility
+        self.midi_out = self._outs.get(self.port_name)
+
+    def _ports_used(self) -> list[str]:
+        used = {self.port_name}
+        for group in (self.m.sends, self.m.verbs, self.m.watches, self.m.triggers):
+            used |= {x.port for x in group if x.port}
+        return sorted(used)
+
+    def _open_one(self, name: str) -> None:
+        mi, mo = rtmidi.MidiIn(), rtmidi.MidiOut()
+        i_in = self._find_port(mi.get_ports(), name)
+        i_out = self._find_port(mo.get_ports(), name)
         if i_in is None or i_out is None:
-            # MIDI host absent: open a virtual port so the bridge starts anyway.
-            # It is useless in that state, but it SAYS so and it does not die —
-            # there would be nothing for a watchdog to restart.
-            self.log(f"port \"{self.port_name}\" not found — is the MIDI host running? falling back to a virtual port")
-            self.midi_in.open_virtual_port("OSC Bridge In")
-            self.midi_out.open_virtual_port("OSC Bridge Out")
+            # Port absent: open a virtual one so the bridge starts anyway. It is
+            # useless in that state, but it SAYS so and it does not die — there
+            # would be nothing for a watchdog to restart.
+            self.log(f'port "{name}" not found — is the MIDI host running? falling back to a virtual port')
+            mi.open_virtual_port(f"OSC Bridge In ({name})")
+            mo.open_virtual_port(f"OSC Bridge Out ({name})")
         else:
-            self.midi_in.open_port(i_in)
-            self.midi_out.open_port(i_out)
-            self.log(f"MIDI on \"{self.midi_in.get_ports()[i_in]}\"")
-        self.midi_in.set_callback(self._on_midi)
+            mi.open_port(i_in)
+            mo.open_port(i_out)
+            self.log(f'MIDI on "{mi.get_ports()[i_in]}"')
+        # The callback is told WHICH port fired it: the same channel and number
+        # on two ports are two different addresses.
+        mi.set_callback(self._on_midi, name)
+        self._ins[name], self._outs[name] = mi, mo
+
+    def _out(self, name: str | None):
+        return self._outs.get(name or self.port_name) or self._outs[self.port_name]
 
     # ── phases ──────────────────────────────────────────────────────────────
     def _resolve(self, args: list, val: int | None = None) -> list:
@@ -167,27 +193,18 @@ class Bridge:
             self._send(st.address, self._resolve(st.args, value))
         self.log(f"phase '{phase}': {len(steps)} messages")
 
-    def _on_midi(self, event, _data=None):
+    def _on_midi(self, event, port=None):
         message, _dt = event
-        if len(message) < 2:
+        decoded = midi.decode(message)
+        if decoded is None:
             return
-        status, d1 = message[0], message[1]
-        if 0xC0 <= status <= 0xCF:
-            # Program Change carries TWO bytes: the program number is the whole
-            # message. There is no separate value, so the number is also the
-            # value -- which is exactly what makes `send pc *` useful: one line
-            # covers all 128 programs, and $a is the one that arrived.
-            kind, d2 = "pc", d1
-        elif len(message) < 3:
-            return
-        else:
-            d2 = message[2]
-            kind = "cc" if 0xB0 <= status <= 0xBF else "note" if 0x90 <= status <= 0x9F else None
-        if kind is None:
-            return
-        channel = (status & 0x0F) + 1
-        key = (kind, channel, d1)
-        wild = (kind, channel, ANY)
+        kind, channel, d1, d2 = decoded
+        port = port or self.port_name
+        key = (port, kind, channel, d1)
+        # A `*` number matches whatever arrived, and the number becomes the value.
+        # Messages that have no number at all (channel pressure, pitch bend) only
+        # ever match this way.
+        wild = (port, kind, channel, ANY)
         t = self._triggers.get(key) or self._triggers.get(wild)
         if t is not None:
             self._run_phase(t.phase, value=d2)
@@ -227,19 +244,14 @@ class Bridge:
                 return
             self._last_emit[id(w)] = now
         v = int(round(value))
-        if not 0 <= v <= 127:
-            # MIDI is 7-bit: SAY it rather than silently truncating.
-            self.log(f"{w.source}: {w.address} = {value} outside 0-127, clamped")
-            v = max(0, min(127, v))
-        if w.kind == "pc":
-            # Program Change is two bytes and has no value slot: the number that
-            # travels IS the program. A `watch ... -> pc` therefore sends the
-            # WATCHED VALUE as the program, which is what makes Live's scene
-            # index reach a pedalboard or an amp modeller as a preset change.
-            self.midi_out.send_message([0xC0 | (w.channel - 1), v])
-            return
-        status = (0xB0 if w.kind == "cc" else 0x90) | (w.channel - 1)
-        self.midi_out.send_message([status, w.number, v])
+        ceiling = midi.KINDS[w.kind].maximum
+        if not 0 <= v <= ceiling:
+            # MIDI values are 7-bit, except pitch bend at 14: SAY it rather than
+            # silently truncating, and name the ceiling that applied.
+            self.log(f"{w.source}: {w.address} = {value} outside 0-{ceiling}, clamped")
+            v = max(0, min(ceiling, v))
+        num = 0 if w.number == ANY else w.number
+        self._out(w.port).send_message(midi.encode(w.kind, w.channel, num, v))
 
     # ── OSC ─────────────────────────────────────────────────────────────────
     def _open_osc(self):

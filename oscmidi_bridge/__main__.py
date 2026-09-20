@@ -61,12 +61,17 @@ def main(argv: list[str]) -> int:
     if verify:
         def num(n):
             return "  *" if n == ANY else f"{n:>3}"
+
+        def on(x):
+            # Only when it differs from the default: two identical-looking lines
+            # on two ports are two different addresses, and --verify must say so.
+            return f"  @{x.port}" if x.port and x.port != m.port else ""
         for s in m.sends:
-            log(f"  {s.kind} {s.channel:>2} {num(s.number)}  ->  {s.address} {s.args}")
+            log(f"  {s.kind} {s.channel:>2} {num(s.number)}  ->  {s.address} {s.args}{on(s)}")
         for v in m.verbs:
-            log(f"  {v.kind} {v.channel:>2} {num(v.number)}  ~>  {v.name}")
+            log(f"  {v.kind} {v.channel:>2} {num(v.number)}  ~>  {v.name}{on(v)}")
         for w in m.watches:
-            log(f"  {w.address}[{w.arg}]  ->  {w.kind} {w.channel} {w.number}")
+            log(f"  {w.address}[{w.arg}]  ->  {w.kind} {w.channel} {w.number}{on(w)}")
         for ph in phases:
             fired = [t for t in m.triggers if t.phase == ph]
             how = (f"on {fired[0].kind} {fired[0].channel} " + ("*" if fired[0].number == ANY else str(fired[0].number)) if fired

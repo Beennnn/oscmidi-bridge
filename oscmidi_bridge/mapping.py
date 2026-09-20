@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .midi import KINDS
+
 # ── literal values ───────────────────────────────────────────────────────────
 # OSC typing is significant: AbletonOSC refuses a track index sent as a float, so
 # the type is inferred from how the value is written.
@@ -42,6 +44,17 @@ ANY = -1
 
 def number(tok: str) -> int:
     return ANY if tok == "*" else int(tok)
+
+
+def kind_of(tok: str) -> str:
+    """Validate a message type AT PARSE TIME, so --verify catches a typo.
+
+    A wrong type would otherwise match nothing at all and stay silent for the
+    whole show -- the failure mode this configuration language exists to avoid.
+    """
+    if tok not in KINDS:
+        raise ValueError(f"unknown message type: {tok!r} — known: {', '.join(KINDS)}")
+    return tok
 
 
 def tokenise(line: str) -> list[str]:
@@ -119,6 +132,7 @@ class Send:
     address: str
     args: list[Any]
     transform: Any = field(default=None)
+    port: str = ""     # empty means the current default port
     source: str = ""   # file:line, for error messages
 
 
@@ -129,6 +143,7 @@ class Verb:
     channel: int
     number: int
     name: str
+    port: str = ""
     source: str = ""
 
 
@@ -145,6 +160,7 @@ class Watch:
     # VU meters: without it the controller redraws on every single message, which
     # is enough to saturate the plugin's CPU. 120 ms is comfortable.
     every_ms: int = 0
+    port: str = ""
     source: str = ""
 
 
@@ -171,6 +187,7 @@ class Trigger:
     kind: str
     channel: int
     number: int
+    port: str = ""
     source: str = ""
 
 
@@ -216,6 +233,7 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
     if p in seen:
         return m            # circular include: stop here, quietly
     seen.add(p)
+    cur_port, seen_port = m.port, False
 
     for n, raw_line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
         line = raw_line.split("#", 1)[0].strip()
@@ -237,13 +255,19 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     m.steps += sub.steps
                     m.triggers += sub.triggers
                 case "port":
-                    # the name may contain spaces: everything after the keyword
-                    m.port = " ".join(words[1:]).strip('"')
+                    # The name may contain spaces: everything after the keyword.
+                    # `port` and `channel` apply to the lines that FOLLOW them, so
+                    # a file can switch gear mid-way without repeating either on
+                    # every line. Stated once at the top, nothing changes.
+                    cur_port = " ".join(words[1:]).strip('"')
+                    if m.port == "Ableton Loopback" and not seen_port:
+                        m.port = cur_port      # the first one is also the default
+                    seen_port = True
                 case "channel":
                     c = int(words[1])
                     if not 1 <= c <= 16:
                         raise ValueError("MIDI channel outside 1-16")
-                    m.channel = c
+                    m.channel = c          # positional, like `port` above
                 case "fanout":
                     h, _, po = " ".join(words[1:]).partition(":")
                     m.fanout.append((h.strip(), int(po)))
@@ -257,7 +281,7 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     # The channel is OPTIONAL: without it, the file's `channel`.
                     # It is unambiguous — an address always starts with a slash.
                     implicit = words[3].startswith("/") or words[3].startswith("$v")
-                    kind = words[1]
+                    kind = kind_of(words[1])
                     chan = m.channel if implicit else int(words[2])
                     num = number(words[2]) if implicit else number(words[3])
                     rest = words[3:] if implicit else words[4:]
@@ -266,7 +290,8 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                         tr = parse_transform(rest[0])
                         rest = rest[1:]
                     m.sends.append(Send(kind, chan, num, rest[0],
-                                        [literal(t) for t in rest[1:]], tr, where))
+                                        [literal(t) for t in rest[1:]], tr,
+                                        port=cur_port, source=where))
                 case "verb":
                     # verb <cc|note> [channel] <number> <gesture name>
                     from .verbs import GESTURES
@@ -276,14 +301,14 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     name = words[3] if implicit else words[4]
                     if name not in GESTURES:
                         raise ValueError(f"unknown gesture: {name!r} — known: {', '.join(sorted(GESTURES))}")
-                    m.verbs.append(Verb(words[1], chan_v, num_v, name, where))
+                    m.verbs.append(Verb(kind_of(words[1]), chan_v, num_v, name, port=cur_port, source=where))
                 case "watch":
                     # watch <address> <arg index> -> <cc|note> [channel] <number> [transform]
                     i = words.index("->")
                     address, rank = words[1], int(words[2])
                     tail = words[i + 1:]
                     impl = len(tail) < 3 or not tail[2].lstrip("-").isdigit()
-                    kind = tail[0]
+                    kind = kind_of(tail[0])
                     chan = m.channel if impl else int(tail[1])
                     num = number(tail[1]) if impl else number(tail[2])
                     extras = tail[2:] if impl else tail[3:]
@@ -297,23 +322,24 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                             every = int(tok.rstrip("ms"))
                         else:
                             raise ValueError(f"unexpected token after watch: {tok!r}")
-                    m.watches.append(Watch(address, rank, kind, chan, num, tr, every, where))
+                    m.watches.append(Watch(address, rank, kind, chan, num, tr, every,
+                                           port=cur_port, source=where))
                 case "on":
                     # on <phase> <address> [args…]
                     # No block, no indentation, no nesting: the phase name is
                     # repeated on every line. Each line stays readable on its own,
                     # and the grammar gains a feature without gaining a shape.
                     m.steps.append(Step(words[1], words[2],
-                                        [literal(t) for t in words[3:]], where))
+                                        [literal(t) for t in words[3:]], source=where))
                 case "trigger":
                     # trigger <phase> <cc|note> [channel] <number>
                     implicit = len(words) == 4
                     chan_t = m.channel if implicit else int(words[3])
                     num_t = number(words[3]) if implicit else number(words[4])
-                    m.triggers.append(Trigger(words[1], words[2], chan_t, num_t, where))
+                    m.triggers.append(Trigger(words[1], kind_of(words[2]), chan_t, num_t, port=cur_port, source=where))
                 case "text":
                     i = words.index("->")
-                    m.texts.append(Text(words[1], words[i + 1], where))
+                    m.texts.append(Text(words[1], words[i + 1], source=where))
                 case _:
                     raise ValueError(f"unknown keyword: {words[0]!r}")
         except Exception as e:
