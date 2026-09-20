@@ -30,7 +30,7 @@ from typing import Any
 from .midi import KINDS
 
 # ── literal values ───────────────────────────────────────────────────────────
-# OSC typing is significant: AbletonOSC refuses a track index sent as a float, so
+# OSC typing is significant: some servers refuse an integer where they want a float, and the reverse, so
 # the type is inferred from how the value is written.
 #   12  int   12.0  float   "x"  string   true/false  T/F   ~  nil
 #   $a  the MIDI value after transformation   $v  the raw MIDI value
@@ -60,7 +60,7 @@ def kind_of(tok: str) -> str:
 def tokenise(line: str) -> list[str]:
     """Split on whitespace, EXCEPT inside double quotes.
 
-    Live names spaces freely -- an output routing is called "Ext. Out", a track
+    Application names contain spaces freely -- an output routing is called "Ext. Out", a track
     "C-Cue Left". A plain split() cuts those in two and hands OSC a truncated
     name, which Live then fails to match without saying why. The quotes are KEPT,
     because they are what tells `literal` a token is a string rather than a number:
@@ -105,7 +105,7 @@ def literal(tok: str) -> Any:
 # Deliberately ONE binary operation and no more: $v, $v+50, $v*2, $v/2, $v-64, $v%4.
 # Enough for a tempo, a signed offset or a cycle; too little to grow into a language.
 # The modulo earns its place on one case the others cannot express: a counter that
-# wraps. Live's beat number grows without bound — `$v%4` is what turns it into a
+# wraps. A beat counter grows without bound — `$v%4` is what turns it into a
 # position in the bar.
 _TRANSFORM = re.compile(r"^\$v(?:\s*([+\-*/%])\s*(-?\d+(?:\.\d+)?))?$")
 
@@ -206,6 +206,9 @@ class Text:
 @dataclass
 class Mapping:
     group: str = "common"
+    # Le nom du module de projection : ce que le pont doit savoir de l'application
+    # qu'il pilote. Vide = aucun geste, mais tout le reste fonctionne.
+    projection: str = ""
     # Default MIDI port and channel: written once at the top of the file rather
     # than repeated on every line. `python3 -m oscmidi_bridge --ports` writes the
     # ports actually present into the file — uncomment the one you want.
@@ -214,9 +217,9 @@ class Mapping:
     host: str = "127.0.0.1"
     send_port: int = 11000
     recv_port: int = 11001
-    # Ports to RELAY Live's replies to. AbletonOSC forces its reply port to 11001
-    # (it does NOT answer the source port), so only one process can receive them.
-    # The bridge holds that port and fans out to any other client.
+    # Ports to RELAY the server's replies to. Some OSC servers FORCE their reply port and do not answer the source port --
+    # the OSC server is one -- so a single process can receive the replies. The bridge
+    # holds that port and fans out to any other client.
     fanout: list = field(default_factory=list)
     sends: list[Send] = field(default_factory=list)
     verbs: list[Verb] = field(default_factory=list)
@@ -249,6 +252,8 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
             match words[0]:
                 case "group":
                     m.group = words[1]
+                case "projection":
+                    m.projection = words[1]
                 case "include":
                     sub = load(p.parent / words[1], seen)
                     m.sends += sub.sends
@@ -256,6 +261,7 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     m.watches += sub.watches
                     m.texts += sub.texts
                     m.fanout += sub.fanout
+                    m.projection = m.projection or sub.projection
                     m.steps += sub.steps
                     m.triggers += sub.triggers
                 case "port":
@@ -298,13 +304,10 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                                         port=cur_port, source=where))
                 case "verb":
                     # verb <cc|note> [channel] <number> <gesture name>
-                    from .verbs import GESTURES
                     implicit = len(words) == 4
                     chan_v = m.channel if implicit else int(words[2])
                     num_v = number(words[2]) if implicit else number(words[3])
                     name = words[3] if implicit else words[4]
-                    if name not in GESTURES:
-                        raise ValueError(f"unknown gesture: {name!r} — known: {', '.join(sorted(GESTURES))}")
                     m.verbs.append(Verb(kind_of(words[1]), chan_v, num_v, name, port=cur_port, source=where))
                 case "watch":
                     # watch <address> <arg index> -> <cc|note> [channel] <number> [transform]

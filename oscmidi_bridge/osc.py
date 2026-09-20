@@ -5,7 +5,7 @@ to a live rig. Every installed package is one more thing that can go missing
 after a Python upgrade or a machine rebuild. OSC fits in eighty lines; write
 them once.
 
-Types covered: i f s T F N b — the ones AbletonOSC actually uses.
+Types covered: i f s T F N b.
 """
 
 from __future__ import annotations

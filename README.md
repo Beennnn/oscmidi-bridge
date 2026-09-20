@@ -2,9 +2,9 @@
 
 # oscmidi-bridge
 
-**An OSC ↔ MIDI bridge between a stage rig and Ableton Live.** Your keys and knobs
-keep sending MIDI exactly as before — and Live now **answers**, so the controller
-can show what Live is actually doing instead of firing into the dark.
+**An OSC ↔ MIDI bridge between a MIDI rig and any OSC application.** Your keys and knobs
+keep sending MIDI exactly as before — and the application now **answers**, so the
+controller can show what it is actually doing instead of firing into the dark.
 
 > **Never required to play.** No note, no sound, no keyboard zone goes through it.
 > If it dies mid-show, the rig keeps playing — only the feedback freezes. That is a
@@ -121,13 +121,20 @@ fanout  127.0.0.1:11101      # e.g. an MCP server, a monitor, a second tool
 
 A client that is not listening never breaks anything.
 
-## Tools
+## Projections
 
-| | |
+The bridge knows nothing about any application. What is specific — gestures,
+the addresses to watch no matter what, the ones that refuse a subscription, and
+the one that witnesses a document change — lives in a **projection**, named in
+one line of configuration:
+
+```sh
+projection  oscmidi_ableton
+```
+
+| projection | for |
 | --- | --- |
-| `tools/gen_catalogue.py` | writes **every** address of the installed AbletonOSC as commented, pre-numbered lines — you uncomment instead of writing |
-| `tools/gen_stc_map.py` | translates the Selected Track Control dialect, keeping its own note and CC numbers, so it can be swapped out without touching the controller |
-| `patches/` | an AbletonOSC patch making the Main track (index `-1`) and the Cue level (`-2`) addressable — neither is in `song.tracks`, and a negative index otherwise resolves silently to a regular track ([upstream PR](https://github.com/ideoforms/AbletonOSC/pull/218)) |
+| [oscmidi-ableton](https://github.com/Beennnn/oscmidi-ableton) | Ableton Live, through AbletonOSC |
 
 ## Licence
 
