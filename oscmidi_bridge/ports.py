@@ -1,6 +1,6 @@
 """Write the list of available MIDI ports INTO the configuration file.
 
-Nobody remembers the exact name of a MIDI port — "Ableton Loopback", "Bome MIDI
+Nobody remembers the exact name of a MIDI port — "Rig Bus", "Bome MIDI
 Translator 1", "RME Fireface UCX Port 1"… — and retyping one by hand produces
 mistakes you only discover when nothing answers. So the tool goes and finds
 them, and writes them as comments next to the active port: you just move the "#".
@@ -48,7 +48,7 @@ def write_ports(path_: Path) -> list[str]:
     active_channel = next((l.split()[1] for l in lines if l.strip().startswith("channel ")), "16")
     if active_port is None:
         active_port = next((p for p in available if "ableton loopback" in p.lower()),
-                          available[0] if available else "Ableton Loopback")
+                          available[0] if available else "Rig Bus")
 
     when = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     block = [f"{DEBUT} on {when} ──────────────────────",
