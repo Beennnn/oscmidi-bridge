@@ -43,8 +43,17 @@ is to be refused.
 - **Output routing is matched by display name**, not by index: send the string
   Live shows ("Ext. Out", "1/2"). No index to resolve, and it survives a change
   of audio interface.
-- **The master track is not in `song.tracks`**, and `tracks[-1]` silently resolves to
-  the *last regular track*. See `patches/`.
+- **Neither Main nor Cue is in `song.tracks`.** `tracks[-1]` resolves silently to
+  the LAST regular track, and `tracks[-2]` to the one before it — so both indices
+  have to be intercepted before they reach the list. See `patches/`: -1 is the
+  Main track, -2 a thin proxy over the Cue bus, whose level and routing hang off
+  `song` rather than off any track.
+- **`cue_volume` is attested, cue routing is not.** Live's own remote scripts use
+  `song.cue_volume`; nothing in them mentions a cue routing attribute. The proxy
+  therefore fetches routing by name and says which attribute is missing, instead
+  of failing from somewhere deeper.
+- **0 dB is 0.8498443365097046**, measured on a fresh master, not computed. A
+  controller scale (0-127) lands half a decibel off when mapped linearly.
 
 ## Working loop
 
@@ -54,4 +63,4 @@ python3 -m oscmidi_bridge --ports     # write available MIDI ports into the conf
 python3 -m oscmidi_bridge             # foreground, for debugging
 ```
 
-The configuration lives outside this repository — see `_config_par_defaut()`.
+The configuration lives outside this repository — see `_default_config()`.
