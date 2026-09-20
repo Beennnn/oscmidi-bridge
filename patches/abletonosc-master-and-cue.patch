@@ -1,0 +1,92 @@
+diff --git a/abletonosc/track.py b/abletonosc/track.py
+index 5e21353..5581632 100644
+--- a/abletonosc/track.py
++++ b/abletonosc/track.py
+@@ -2,6 +2,68 @@ from typing import Tuple, Any, Callable, Optional
+ from .handler import AbletonOSCHandler
+ 
+ 
++class CueBus:
++    """Live's Cue (headphone) output, dressed as a track so that index -2 reaches
++    it exactly as -1 reaches Main.
++
++    The Cue output is not a Track: its level and its routing hang off `song`
++    directly, which is why no OSC address reached them until now. Every track
++    handler here touches either `mixer_device.<parameter>` or a routing
++    attribute, so a thin proxy is all it takes.
++
++    It deliberately exposes NOTHING else. A call this bus cannot serve raises
++    instead of silently acting on some other object -- the failure mode that
++    makes `tracks[-1]` quietly return the last regular track.
++    """
++
++    def __init__(self, song):
++        self._song = song
++        self.mixer_device = self        # the track API looks for volume here
++
++    @property
++    def volume(self):
++        return self._song.cue_volume
++
++    def _routing(self, name):
++        """Cue routing, if this Live version exposes it.
++
++        `cue_volume` is certain -- Live's own scripts use it. The routing
++        attributes are NOT attested in them, so they are fetched by name and the
++        failure is made explicit: better a message that says which attribute is
++        missing than an AttributeError from somewhere inside the handler.
++        """
++        try:
++            return getattr(self._song, name)
++        except AttributeError:
++            raise AttributeError(
++                "this Live version does not expose song.%s -- the Cue bus (index -2) "
++                "supports volume only here" % name)
++
++    @property
++    def output_routing_type(self):
++        return self._routing("cue_output_routing_type")
++
++    @output_routing_type.setter
++    def output_routing_type(self, value):
++        self._song.cue_output_routing_type = value      # raises if absent, as above
++
++    @property
++    def output_routing_channel(self):
++        return self._routing("cue_output_routing_channel")
++
++    @output_routing_channel.setter
++    def output_routing_channel(self, value):
++        self._song.cue_output_routing_channel = value
++
++    @property
++    def available_output_routing_types(self):
++        return self._routing("available_cue_output_routing_types")
++
++    @property
++    def available_output_routing_channels(self):
++        return self._routing("available_cue_output_routing_channels")
++
++
+ class TrackHandler(AbletonOSCHandler):
+     def __init__(self, manager):
+         super().__init__(manager)
+@@ -18,7 +80,17 @@ class TrackHandler(AbletonOSCHandler):
+                     track_indices = [int(params[0])]
+ 
+                 for track_index in track_indices:
+-                    track = self.song.tracks[track_index]
++                    # Index -1 addresses the master track, -2 the Cue output. Live's `song.tracks` does not
++                    # contain it, and a plain negative index would silently resolve to the
++                    # LAST regular track -- so the case has to be explicit. Without this,
++                    # the master track's volume, panning and output routing are simply not
++                    # reachable over OSC.
++                    if track_index == -1:
++                        track = self.song.master_track
++                    elif track_index == -2:
++                        track = CueBus(self.song)
++                    else:
++                        track = self.song.tracks[track_index]
+                     if include_track_id:
+                         rv = func(track, *args, tuple([track_index] + params[1:]))
+                     else:

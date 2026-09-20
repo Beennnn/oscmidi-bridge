@@ -24,10 +24,9 @@ BASES = {"song.py": "song", "track.py": "track", "clip.py": "clip", "device.py":
          "clip_slot.py": "clip_slot", "scene.py": "scene", "view.py": "view",
          "application.py": "application"}
 # Default channel, and the overflow channels used once it is full. They descend
-# from the top because low channels are where a rig puts its playing channels;
-# 15 is deliberately skipped, being a natural place to carry an untransposed
-# keyboard next to the bridge's own 16.
-CHANNEL, OVERFLOW = 16, (14, 13)
+# from the top on purpose: a rig fills its LOW channels with playing material, so
+# the catalogue grows away from them and the two never meet in the middle.
+CHANNEL, OVERFLOW = 16, (15, 14, 13, 12)
 # Numbers already taken by the hand-written configuration — never reassigned.
 TAKEN = set(range(20, 50)) | set(range(60, 96)) | set(range(100, 110))
 ORDER = ["song", "view", "scene", "track", "clip", "clip_slot", "device", "application"]
