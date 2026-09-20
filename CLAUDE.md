@@ -48,10 +48,12 @@ is to be refused.
   have to be intercepted before they reach the list. See `patches/`: -1 is the
   Main track, -2 a thin proxy over the Cue bus, whose level and routing hang off
   `song` rather than off any track.
-- **`cue_volume` is attested, cue routing is not.** Live's own remote scripts use
-  `song.cue_volume`; nothing in them mentions a cue routing attribute. The proxy
-  therefore fetches routing by name and says which attribute is missing, instead
-  of failing from somewhere deeper.
+- **`cue_volume` lives on the MAIN track's mixer device**, not on `song` — the
+  API definition says "MainTrack only: Const access to the Cue Volume Parameter".
+  Guessing `song.cue_volume` looks right and fails.
+- **There is no cue output routing in the Live API.** The cue output is chosen in
+  the audio preferences, outside the object model. Index -2 carries volume and
+  nothing else, on purpose.
 - **0 dB is 0.8498443365097046**, measured on a fresh master, not computed. A
   controller scale (0-127) lands half a decibel off when mapped linearly.
 
