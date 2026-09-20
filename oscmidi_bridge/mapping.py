@@ -34,6 +34,34 @@ from typing import Any
 #   $a  the MIDI value after transformation   $v  the raw MIDI value
 
 
+def tokenise(line: str) -> list[str]:
+    """Split on whitespace, EXCEPT inside double quotes.
+
+    Live names spaces freely -- an output routing is called "Ext. Out", a track
+    "C-Cue Left". A plain split() cuts those in two and hands OSC a truncated
+    name, which Live then fails to match without saying why. The quotes are KEPT,
+    because they are what tells `literal` a token is a string rather than a number:
+    dropping them here would turn "12" into the integer 12.
+    """
+    out: list[str] = []
+    cur = ""
+    quoted = False
+    for ch in line:
+        if ch == '"':
+            quoted = not quoted
+            cur += ch
+        elif ch.isspace() and not quoted:
+            if cur:
+                out.append(cur); cur = ""
+        else:
+            cur += ch
+    if cur:
+        out.append(cur)
+    if quoted:
+        raise ValueError("unclosed double quote")
+    return out
+
+
 def literal(tok: str) -> Any:
     if tok.startswith('"') and tok.endswith('"'):
         return tok[1:-1]
@@ -111,6 +139,32 @@ class Watch:
 
 
 @dataclass
+class Step:
+    """One OSC message belonging to a named PHASE, not to a MIDI key.
+
+    Two phases matter in practice, and they differ by what they touch:
+    `boot` sets what never moves during the show (master routing, output
+    levels), `song` re-initialises what the playing DOES move, at the start of
+    each piece. Steps run in the order they are written — that is the whole
+    control flow, and it is enough.
+    """
+    phase: str
+    address: str
+    args: list[Any]
+    source: str = ""
+
+
+@dataclass
+class Trigger:
+    """A MIDI key that replays a phase."""
+    phase: str
+    kind: str
+    channel: int
+    number: int
+    source: str = ""
+
+
+@dataclass
 class Text:
     """An OSC reply → a key in the JSON state file (what MIDI cannot carry)."""
     address: str
@@ -137,6 +191,8 @@ class Mapping:
     verbs: list[Verb] = field(default_factory=list)
     watches: list[Watch] = field(default_factory=list)
     texts: list[Text] = field(default_factory=list)
+    steps: list[Step] = field(default_factory=list)
+    triggers: list[Trigger] = field(default_factory=list)
 
 
 _TARGET_RE = re.compile(r"^([\d.]+):(\d+)\s*->\s*(\d+)$")
@@ -155,7 +211,7 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
         line = raw_line.split("#", 1)[0].strip()
         if not line:
             continue
-        words = line.split()
+        words = tokenise(line)
         where = f"{p.name}:{n}"
         try:
             match words[0]:
@@ -168,6 +224,8 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     m.watches += sub.watches
                     m.texts += sub.texts
                     m.fanout += sub.fanout
+                    m.steps += sub.steps
+                    m.triggers += sub.triggers
                 case "port":
                     # the name may contain spaces: everything after the keyword
                     m.port = " ".join(words[1:]).strip('"')
@@ -230,6 +288,19 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                         else:
                             raise ValueError(f"unexpected token after watch: {tok!r}")
                     m.watches.append(Watch(address, rank, kind, chan, num, tr, every, where))
+                case "on":
+                    # on <phase> <address> [args…]
+                    # No block, no indentation, no nesting: the phase name is
+                    # repeated on every line. Each line stays readable on its own,
+                    # and the grammar gains a feature without gaining a shape.
+                    m.steps.append(Step(words[1], words[2],
+                                        [literal(t) for t in words[3:]], where))
+                case "trigger":
+                    # trigger <phase> <cc|note> [channel] <number>
+                    implicit = len(words) == 4
+                    chan_t = m.channel if implicit else int(words[3])
+                    num_t = int(words[3]) if implicit else int(words[4])
+                    m.triggers.append(Trigger(words[1], words[2], chan_t, num_t, where))
                 case "text":
                     i = words.index("->")
                     m.texts.append(Text(words[1], words[i + 1], where))

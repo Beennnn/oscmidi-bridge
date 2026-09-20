@@ -29,3 +29,21 @@ watch /live/song/get/tempo           0  ->  cc 102  $v-50
 
 # What MIDI cannot carry goes to state.json.
 text  /live/song/get/track_names  ->  tracks
+
+# ── phases: what settles itself, with nobody pressing anything ──────────────
+# `boot` is what does NOT move during the show. It replays on its own as soon as
+# Live answers after a silence — so on a Live restart, and when another set is
+# loaded and puts the routing back wherever it likes. Make it idempotent.
+on boot  /live/track/set/output_routing_type     -1 "Ext. Out"
+on boot  /live/track/set/output_routing_channel  -1 "1/2"
+
+# `song` is what PLAYING moves and what has to be straightened at the start of
+# each piece. Fire it from whatever knows a new song was loaded.
+on song  /live/song/set/metronome 0
+on song  /live/view/set/selected_scene 0
+trigger song  cc 51
+
+# -1 is the Main (master) track: it is not in song.tracks, and a negative index
+# would otherwise resolve silently to the LAST regular track. See patches/.
+# Names with spaces go in double quotes — AbletonOSC matches an output routing by
+# its display name, so "Ext. Out" is written exactly as Live shows it.

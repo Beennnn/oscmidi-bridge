@@ -51,6 +51,9 @@ rig.
   (`every 120ms`), which is what makes VU meters survivable;
 - **text** — what MIDI cannot carry (track and scene names) lands in a `state.json`
   the client re-reads;
+- **phases** — a named list of OSC messages with no MIDI key of its own: `boot`
+  replays whenever Live answers after a silence (a restart, another set loaded),
+  `song` is fired at the start of each piece to straighten what playing moved;
 - **hot reload** — edit, save, done. A syntax error **does not stop the bridge**:
   the previous configuration stays live and the error is logged with its line
   number. Editing during a rehearsal cannot cut the feedback mid-song.
@@ -83,6 +86,11 @@ verb  cc 61   scene.next
 watch /live/song/get/is_playing  0  ->  cc 100
 watch /live/track/get/output_meter_level 0 -> cc 110  every 120ms
 text  /live/song/get/track_names    ->  tracks
+```
+
+```sh
+on boot  /live/track/set/output_routing_type -1 "Ext. Out"   # -1 = the Main track
+trigger song  cc 51
 ```
 
 `$a` is the incoming CC value, `$track` and `$scene` the current selection —

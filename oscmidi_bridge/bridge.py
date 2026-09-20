@@ -61,6 +61,12 @@ class Bridge:
         self._texts: dict[str, list] = {}
         for t in m.texts:
             self._texts.setdefault(t.address, []).append(t)
+        # Phases. `boot` replays whenever Live comes back: a set reloaded or Live
+        # restarted leaves the master routing wherever the new set put it, and a
+        # monitoring path that silently reverts is discovered on stage.
+        self._live_seen = False
+        self._last_reply = 0.0
+        self._triggers = {(t.kind, t.channel, t.number): t for t in m.triggers}
 
     # ── hot reload ──────────────────────────────────────────────────────────
     def _fingerprint(self) -> float:
@@ -85,6 +91,7 @@ class Bridge:
             self._watches.setdefault(w.address, []).append(w)
         for t in self.m.texts:
             self._texts.setdefault(t.address, []).append(t)
+        self._triggers = {(t.kind, t.channel, t.number): t for t in self.m.triggers}
 
     def _reload(self) -> None:
         """Re-read the configuration without restarting.
@@ -131,36 +138,54 @@ class Bridge:
             self.log(f"MIDI on \"{self.midi_in.get_ports()[i_in]}\"")
         self.midi_in.set_callback(self._on_midi)
 
-    def _on_midi(self, evenement, _data=None):
-        message, _dt = evenement
+    # ── phases ──────────────────────────────────────────────────────────────
+    def _resolve(self, args: list, val: int | None = None) -> list:
+        """Substitute $a / $track / $scene in an argument list.
+
+        $track and $scene are what makes "act on the current selection"
+        expressible: AbletonOSC only wants an index, and the bridge is the one
+        watching which index that is.
+        """
+        subs = {"$track": int(self.state.get("_track", 0)),
+                "$scene": int(self.state.get("_scene", 0))}
+        if val is not None:
+            subs["$a"] = val
+            subs["$a.0"] = float(val)
+        return [subs.get(a, a) if isinstance(a, str) else a for a in args]
+
+    def _run_phase(self, phase: str) -> None:
+        steps = [st for st in self.m.steps if st.phase == phase]
+        if not steps:
+            return
+        for st in steps:
+            self._send(st.address, self._resolve(st.args))
+        self.log(f"phase '{phase}': {len(steps)} messages")
+
+    def _on_midi(self, event, _data=None):
+        message, _dt = event
         if len(message) < 3:
             return
-        statut, d1, d2 = message[0], message[1], message[2]
-        kind = "cc" if 0xB0 <= statut <= 0xBF else "note" if 0x90 <= statut <= 0x9F else None
+        status, d1, d2 = message[0], message[1], message[2]
+        kind = "cc" if 0xB0 <= status <= 0xBF else "note" if 0x90 <= status <= 0x9F else None
         if kind is None:
             return
-        channel_ = (statut & 0x0F) + 1
-        cle = (kind, channel_, d1)
-        v = self._verbs.get(cle)
+        channel = (status & 0x0F) + 1
+        key = (kind, channel, d1)
+        t = self._triggers.get(key)
+        if t is not None:
+            self._run_phase(t.phase)
+            return
+        v = self._verbs.get(key)
         if v is not None:
             # A gesture: computes from the observed state, returns several messages.
             for address, args in GESTURES[v.name](self._state_snapshot(), d2):
                 self._send(address, args)
             return
-        s = self._sends.get(cle)
+        s = self._sends.get(key)
         if s is None:
             return
         val = s.transform(d2) if s.transform else d2
-        # Substitutions available in arguments:
-        #   $a     the CC value after transform      $a.0  the same, forced to float
-        #   $track the SELECTED track, $scene the selected scene
-        # The last two are what makes "act on the current track" expressible at all:
-        # AbletonOSC has no such notion, it wants an index. The bridge watches it.
-        subs = {"$a": val, "$a.0": float(val),
-                "$track": int(self.state.get("_track", 0)),
-                "$scene": int(self.state.get("_scene", 0))}
-        args = [subs.get(a, a) if isinstance(a, str) else a for a in s.args]
-        self._send(s.address, args)
+        self._send(s.address, self._resolve(s.args, val))
 
     def _send(self, address: str, args: list):
         try:
@@ -224,6 +249,15 @@ class Bridge:
         self.log(f"{len(self._watches)} subscriptions, {len(self._texts)} texts")
 
     def _on_osc(self, address: str, args: list):
+        # A reply means Live is there. The FIRST one after a silence replays the
+        # `boot` phase: Live restarted, or another set was loaded, and either way
+        # the master routing is now whatever that set decided. Re-asserting it is
+        # idempotent, so doing it once too often costs nothing — missing it once
+        # is discovered on stage.
+        self._last_reply = time.time()
+        if not self._live_seen:
+            self._live_seen = True
+            self._run_phase("boot")
         # The current selection is remembered no matter what: it is what makes
         # "the current track" expressible, even if no watch sends it back as MIDI.
         if address == "/live/view/get/selected_track" and args:
@@ -296,6 +330,12 @@ class Bridge:
                 self._reload()
             # If Live restarts, our subscriptions die with it without warning:
             # re-issue them periodically. This is idempotent on the AbletonOSC side.
+            # Live gone quiet for two refresh cycles: consider it away, so that
+            # its return replays `boot`. Two cycles rather than one, because a
+            # single missed answer is a hiccup, not a restart.
+            if self._live_seen and time.time() - self._last_reply > 70:
+                self._live_seen = False
+                self.log("Live is silent — the boot phase will replay when it answers again")
             if time.time() - last_refresh > 30:
                 last_refresh = time.time()
                 self._subscribe()

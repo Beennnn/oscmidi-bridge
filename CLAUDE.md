@@ -36,6 +36,13 @@ is to be refused.
 - **7 bits**: a value above 127 is clamped **and logged**, never silently truncated.
 - **A bad configuration line refuses the *reload*, not the process**: the previous
   configuration stays live and the error is logged with its line number.
+- **Never split a config line on whitespace alone.** Live names contain spaces
+  ("Ext. Out", "C-Cue Left") and a plain `split()` hands OSC half a name, which
+  Live then fails to match without saying why. `tokenise` keeps quoted groups —
+  and keeps the quotes, because they are what distinguishes `"12"` from `12`.
+- **Output routing is matched by display name**, not by index: send the string
+  Live shows ("Ext. Out", "1/2"). No index to resolve, and it survives a change
+  of audio interface.
 - **The master track is not in `song.tracks`**, and `tracks[-1]` silently resolves to
   the *last regular track*. See `patches/`.
 
