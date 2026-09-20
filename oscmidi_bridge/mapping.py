@@ -102,9 +102,12 @@ def literal(tok: str) -> Any:
 
 
 # ── transforming the MIDI value ──────────────────────────────────────────────
-# Deliberately ONE binary operation and no more: $v, $v+50, $v*2, $v/2, $v-64.
-# Enough for a tempo or a signed offset; too little to grow into a language.
-_TRANSFORM = re.compile(r"^\$v(?:\s*([+\-*/])\s*(-?\d+(?:\.\d+)?))?$")
+# Deliberately ONE binary operation and no more: $v, $v+50, $v*2, $v/2, $v-64, $v%4.
+# Enough for a tempo, a signed offset or a cycle; too little to grow into a language.
+# The modulo earns its place on one case the others cannot express: a counter that
+# wraps. Live's beat number grows without bound — `$v%4` is what turns it into a
+# position in the bar.
+_TRANSFORM = re.compile(r"^\$v(?:\s*([+\-*/%])\s*(-?\d+(?:\.\d+)?))?$")
 
 
 def parse_transform(tok: str):
@@ -120,6 +123,7 @@ def parse_transform(tok: str):
         "-": lambda v: v - k,
         "*": lambda v: v * k,
         "/": lambda v: v / k,
+        "%": lambda v: v % k,
     }[op]
 
 
