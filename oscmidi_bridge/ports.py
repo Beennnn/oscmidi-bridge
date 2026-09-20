@@ -10,6 +10,8 @@ The block is delimited, so it can be regenerated without touching the rest.
 
 from __future__ import annotations
 
+from .mapping import DEFAULT_PORT
+
 import datetime
 from pathlib import Path
 
@@ -48,7 +50,7 @@ def write_ports(path_: Path) -> list[str]:
     active_channel = next((l.split()[1] for l in lines if l.strip().startswith("channel ")), "16")
     if active_port is None:
         active_port = next((p for p in available if "ableton loopback" in p.lower()),
-                          available[0] if available else "Rig Bus")
+                          available[0] if available else DEFAULT_PORT)
 
     when = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     block = [f"{DEBUT} on {when} ──────────────────────",

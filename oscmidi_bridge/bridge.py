@@ -26,7 +26,12 @@ from .projection import load as load_projection
 # that its MIDI host provides permanently. One more port would be one more thing
 # to configure on every key, and one more to lose when the host goes down. The
 # bridge attaches to what is there and filters on the channel.
-DEFAULT_PORT = "Rig Bus"
+# The port name is a property of an INSTALLATION, not of this bridge: it is what the
+# person called their MIDI bus. The default therefore describes the port's ROLE rather
+# than naming one rig's — "Rig Bus" was one person's name and had no business being the
+# value everyone else inherits. `ports.py` prefers the first real port anyway; this is
+# only the label of last resort, and the sentinel that means "the config said nothing".
+DEFAULT_PORT = "OSC Bridge"
 
 
 class Bridge:
