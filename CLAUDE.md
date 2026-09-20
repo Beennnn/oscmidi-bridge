@@ -1,6 +1,6 @@
 # oscmidi-bridge — notes for maintainers
 
-OSC ↔ MIDI bridge between Ableton Live (via **AbletonOSC**) and a MIDI controller.
+OSC ↔ MIDI bridge between any OSC application and a MIDI controller.
 Python daemon, no dependency beyond `python-rtmidi`.
 
 ## The rule that outranks everything
@@ -25,45 +25,38 @@ is to be refused.
   and does not answer the source port, so only one process can receive Live's state.
   The bridge holds it — it serves the show — and relays to other clients.
 
+## Projections — the line that must not blur
+
+**Nothing application-specific belongs in this repository.** Gestures, the
+addresses to watch no matter what, the ones that refuse a subscription, and the
+one that witnesses a document change: all four live in a projection module, and
+the contract is in `projection.py`.
+
+When adding anything, ask whether Reaper or QLab would need it. If not, it is the
+projection's. That line is why [oscmidi-ableton](https://github.com/Beennnn/oscmidi-ableton)
+exists, and letting it blur would undo the split.
+
 ## Traps, all of them paid for at least once
 
-- **`start_listen` AND an initial `get`**: Live broadcasts nothing until asked.
-  Without the `get`, state stays empty until the first change.
-- **Some addresses accept no subscription** (`track_names`, `scenes/name`):
-  AbletonOSC answers *Unknown OSC address*. Poll them instead.
-- **OSC typing is significant**: AbletonOSC refuses an integer tempo and a float
-  track index. Hence `$a.0` to force a float.
+- **A gesture cannot be validated while parsing**: the projection is only known
+  when the bridge starts. It is checked there instead — an unknown gesture would
+  otherwise match nothing and stay silent for a whole show.
+- **7 bits**: a value above 127 is clamped **and logged**, never silently
+  truncated. Pitch bend is 14.
 - **Message types differ on three points, all of them quiet when wrong**: length
-  (Program Change and channel pressure are two bytes — an early `len < 3` guard
-  dropped every one of them), whether there is a number to address at all
-  (channel pressure and pitch bend have none), and value width (bend is 14 bits,
-  little end first; read as one byte it looks like the wheel jumps mid-travel).
+  (Program Change and channel pressure are two bytes), whether there is a number
+  to address at all (channel pressure and pitch bend have none), and value width.
   All three live in `midi.py`, in one table, and nowhere else.
 - **An unknown message type is refused at PARSE time**, by `--verify`. A typo
   would otherwise match nothing and say nothing for a whole show.
-- **7 bits**: a value above 127 is clamped **and logged**, never silently truncated.
+- **Never split a config line on whitespace alone.** Application names contain
+  spaces, and a plain `split()` hands OSC half a name. `tokenise` keeps quoted
+  groups — and keeps the quotes, because they distinguish `"12"` from `12`.
 - **A bad configuration line refuses the *reload*, not the process**: the previous
   configuration stays live and the error is logged with its line number.
-- **Never split a config line on whitespace alone.** Live names contain spaces
-  ("Ext. Out", "C-Cue Left") and a plain `split()` hands OSC half a name, which
-  Live then fails to match without saying why. `tokenise` keeps quoted groups —
-  and keeps the quotes, because they are what distinguishes `"12"` from `12`.
-- **Output routing is matched by display name**, not by index: send the string
-  Live shows ("Ext. Out", "1/2"). No index to resolve, and it survives a change
-  of audio interface.
-- **Neither Main nor Cue is in `song.tracks`.** `tracks[-1]` resolves silently to
-  the LAST regular track, and `tracks[-2]` to the one before it — so both indices
-  have to be intercepted before they reach the list. See `patches/`: -1 is the
-  Main track, -2 a thin proxy over the Cue bus, whose level and routing hang off
-  `song` rather than off any track.
-- **`cue_volume` lives on the MAIN track's mixer device**, not on `song` — the
-  API definition says "MainTrack only: Const access to the Cue Volume Parameter".
-  Guessing `song.cue_volume` looks right and fails.
-- **There is no cue output routing in the Live API.** The cue output is chosen in
-  the audio preferences, outside the object model. Index -2 carries volume and
-  nothing else, on purpose.
-- **0 dB is 0.8498443365097046**, measured on a fresh master, not computed. A
-  controller scale (0-127) lands half a decibel off when mapped linearly.
+- **The bridge owns the reply port and fans out.** Some OSC servers force their
+  reply port and do not answer the source port, so only one process can receive
+  their replies.
 
 ## Working loop
 
@@ -73,4 +66,4 @@ python3 -m oscmidi_bridge --ports     # write available MIDI ports into the conf
 python3 -m oscmidi_bridge             # foreground, for debugging
 ```
 
-The configuration lives outside this repository — see `_default_config()`.
+The configuration lives outside this repository — see `_default_config()`; projections are ordinary importable modules.

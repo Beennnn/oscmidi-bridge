@@ -18,7 +18,7 @@ import rtmidi
 
 from . import midi, osc
 from .mapping import ANY, Mapping
-from .verbs import GESTURES
+from .projection import load as load_projection
 
 # Default MIDI port: the one the controller ALREADY uses.
 #
@@ -27,15 +27,6 @@ from .verbs import GESTURES
 # to configure on every key, and one more to lose when the host goes down. The
 # bridge attaches to what is there and filters on the channel.
 DEFAULT_PORT = "Rig Bus"
-
-# Addresses AbletonOSC exposes as a `get` but NOT as a subscription. Measured
-# against the installed version, not guessed: each one answered "Unknown OSC
-# address". Lists (track_names, scenes/name) behave the same way and are already
-# excluded, being declared as `text`.
-NO_LISTEN = frozenset({
-    "/live/song/get/num_tracks",
-    "/live/song/get/num_scenes",
-})
 
 
 class Bridge:
@@ -67,6 +58,15 @@ class Bridge:
         self._live_seen = False
         self._last_reply = 0.0
         self._tracks_seen = None
+        self.proj = load_projection(m.projection)
+        # An unknown gesture would match nothing and stay silent for a whole show.
+        # It cannot be caught while parsing -- the projection is only known here --
+        # so it is caught here, before a single message goes out.
+        unknown = sorted({v.name for v in m.verbs} - set(self.proj.gestures))
+        if unknown:
+            known = ", ".join(sorted(self.proj.gestures)) or "none"
+            raise ValueError(f"gestures unknown to projection {self.proj.name!r}: "
+                             f"{', '.join(unknown)} — known: {known}")
         self._triggers = {(t.port, t.kind, t.channel, t.number): t for t in m.triggers}
 
     # ── hot reload ──────────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ class Bridge:
         """Substitute $a / $track / $scene in an argument list.
 
         $track and $scene are what makes "act on the current selection"
-        expressible: AbletonOSC only wants an index, and the bridge is the one
+        expressible: the OSC server only wants an index, and the bridge is the one
         watching which index that is.
         """
         subs = {"$track": int(self.state.get("_track", 0)),
@@ -213,7 +213,7 @@ class Bridge:
         v = self._verbs.get(key) or self._verbs.get(wild)
         if v is not None:
             # A gesture: computes from the observed state, returns several messages.
-            for address, args in GESTURES[v.name](self._state_snapshot(), d2):
+            for address, args in self.proj.gestures[v.name](self._state_snapshot(), d2):
                 self._send(address, args)
             return
         s = self._sends.get(key) or self._sends.get(wild)
@@ -263,31 +263,29 @@ class Bridge:
         self.log(f"OSC → {self.m.host}:{self.m.send_port}, replies on {self.m.recv_port}")
 
     def _subscribe(self):
-        """Live broadcasts nothing until asked.
+        """The application broadcasts nothing until asked.
 
         Hence a `start_listen` AND an initial `get`: without the `get`, the state
         stays empty until the first change — and a key lit by mistake is worse
         than a key left dark.
         """
-        # These six are watched NO MATTER WHAT: they are what makes gestures
-        # computable, even when the configuration does not send them back as MIDI.
-        essential = ["/live/view/get/selected_track", "/live/view/get/selected_scene",
-                      "/live/song/get/num_scenes", "/live/song/get/num_tracks",
-                      "/live/song/get/is_playing", "/live/song/get/tempo"]
+        # The projection names what must be watched NO MATTER WHAT: the gestures
+        # compute from it, even when the configuration never sends it back as MIDI.
+        essential = list(self.proj.essential)
         for address in list(dict.fromkeys(list(self._watches) + list(self._texts) + essential)):
-            # Some addresses have NO start_listen and AbletonOSC answers "Unknown
+            # Some addresses have NO start_listen and the OSC server answers "Unknown
             # OSC address" — every 30 s, straight into Live's log. Asking once is a
             # mistake; asking forever is noise that hides real errors. They are
             # re-read by the `get` below, which is plenty for values that barely move.
-            if address not in self._texts and address not in NO_LISTEN:
+            if address not in self._texts and address not in self.proj.no_listen:
                 self.sock.sendto(osc.encode(address.replace("/get/", "/start_listen/")),
                                  (self.m.host, self.m.send_port))
             self.sock.sendto(osc.encode(address), (self.m.host, self.m.send_port))
         self.log(f"{len(self._watches)} subscriptions, {len(self._texts)} texts")
 
     def _on_osc(self, address: str, args: list):
-        # A reply means Live is there. The FIRST one after a silence replays the
-        # `boot` phase: Live restarted, or another set was loaded, and either way
+        # A reply means the application is there. The FIRST one after a silence replays the
+        # `boot` phase: the application restarted, or loaded another document, and either way
         # the master routing is now whatever that set decided. Re-asserting it is
         # idempotent, so doing it once too often costs nothing — missing it once
         # is discovered on stage.
@@ -295,15 +293,15 @@ class Bridge:
         if not self._live_seen:
             self._live_seen = True
             self._run_phase("boot")
-        # A set that is LOADED rather than a Live that restarted: the process never
-        # went quiet, so the silence check above never fires -- yet the new set
-        # brought its own master routing and levels. The track names are the cheapest
-        # reliable witness, and the bridge already reads them. Renaming a track
-        # replays boot too; boot is idempotent, so that costs nothing.
-        if address == "/live/song/get/track_names" and args:
+        # A DOCUMENT loaded rather than a process restarted: nothing ever went
+        # quiet, so the silence check above never fires -- yet the new document
+        # brought its own settings, which is exactly what `boot` exists to assert.
+        # The projection names the address that witnesses it; the bridge already
+        # reads it. A false positive replays boot, which is idempotent.
+        if self.proj.witness and address == self.proj.witness and args:
             names = tuple(args)
             if self._tracks_seen is not None and names != self._tracks_seen:
-                self.log("the set changed — replaying the boot phase")
+                self.log("the document changed — replaying the boot phase")
                 self._run_phase("boot")
             self._tracks_seen = names
         # The current selection is remembered no matter what: it is what makes
@@ -354,7 +352,7 @@ class Bridge:
                 time.sleep(1)
                 continue
             if data:
-                # Fan-out: AbletonOSC forces its reply port and does not answer the
+                # Fan-out: the OSC server forces its reply port and does not answer the
                 # source port, so only one process can read them. The bridge holds it
                 # — it serves the show — and relays to the other clients.
                 for target in self.m.fanout:
@@ -377,7 +375,7 @@ class Bridge:
                 self._mtime = fp
                 self._reload()
             # If Live restarts, our subscriptions die with it without warning:
-            # re-issue them periodically. This is idempotent on the AbletonOSC side.
+            # re-issue them periodically. Re-subscribing is expected to be idempotent.
             # Live gone quiet for two refresh cycles: consider it away, so that
             # its return replays `boot`. Two cycles rather than one, because a
             # single missed answer is a hiccup, not a restart.
