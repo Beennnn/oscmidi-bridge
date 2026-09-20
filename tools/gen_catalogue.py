@@ -23,8 +23,11 @@ ABLETONOSC = Path.home() / "Music/Ableton/User Library/Remote Scripts/AbletonOSC
 BASES = {"song.py": "song", "track.py": "track", "clip.py": "clip", "device.py": "device",
          "clip_slot.py": "clip_slot", "scene.py": "scene", "view.py": "view",
          "application.py": "application"}
-# Default channel, and the overflow channels used once it is full.
-CHANNEL, OVERFLOW = 16, (15, 14)
+# Default channel, and the overflow channels used once it is full. They descend
+# from the top because low channels are where a rig puts its playing channels;
+# 15 is deliberately skipped, being a natural place to carry an untransposed
+# keyboard next to the bridge's own 16.
+CHANNEL, OVERFLOW = 16, (14, 13)
 # Numbers already taken by the hand-written configuration — never reassigned.
 TAKEN = set(range(20, 50)) | set(range(60, 96)) | set(range(100, 110))
 ORDER = ["song", "view", "scene", "track", "clip", "clip_slot", "device", "application"]
