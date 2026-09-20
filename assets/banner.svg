@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-label="oscmidi-bridge — a two-way OSC and MIDI bridge that names no application">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1020"/>
+      <stop offset="0.55" stop-color="#141a35"/>
+      <stop offset="1" stop-color="#1c1030"/>
+    </linearGradient>
+    <linearGradient id="gM" gradientUnits="userSpaceOnUse" x1="70" y1="100" x2="256" y2="262">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.5" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="gR" gradientUnits="userSpaceOnUse" x1="302" y1="0" x2="788" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.5" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="gB" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1280" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.5" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="360" fill="url(#bg)"/>
+  <rect x="0" y="352" width="1280" height="8" fill="url(#gB)" opacity="0.85"/>
+
+  <!-- what the repository is, said as a shape -->
+  <g transform="translate(70,100)" opacity="0.95">
+    <g fill="none" stroke="url(#gM)" stroke-width="2.5">
+      <path d="M4 24 h70 M112 24 h70"/>
+      <path d="M62 12 l14 12 l-14 12" opacity="0.9"/>
+      <path d="M124 54 l-14 12 l14 12" opacity="0.6"/>
+      <path d="M4 66 h70 M112 66 h70" opacity="0.6"/>
+      <path d="M2 108 h182"/>
+      <path d="M14 108 C 50 44, 136 44, 172 108"/>
+      <path d="M40 108 v-32 M93 108 v-50 M146 108 v-32"/>
+      <path d="M22 108 v48 M164 108 v48"/>
+    </g>
+    <circle cx="93" cy="58" r="8" fill="url(#gM)" filter="url(#glow)"/>  </g>
+
+  <!-- name, one-line subtitle, technical line -->
+  <g transform="translate(300,162)">
+    <text x="0" y="0" font-family="-apple-system, Segoe UI, sans-serif" font-size="62" font-weight="700" fill="#ffffff" letter-spacing="-0.5">oscmidi-bridge</text>
+    <rect x="2" y="16" width="486" height="5" rx="2.5" fill="url(#gR)"/>
+    <text x="2" y="68" font-family="-apple-system, Segoe UI, sans-serif" font-size="24" fill="#aab4d8">An OSC ↔ MIDI bridge that knows the name of no application.</text>
+    <text x="2" y="106" font-family="Menlo, Consolas, monospace" font-size="17" fill="#7f8bb5">the controller keeps speaking MIDI  ·  the application answers back with its state</text>
+  </g>
+</svg>

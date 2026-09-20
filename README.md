@@ -1,4 +1,4 @@
-![oscmidi-bridge](docs/banner.png)
+<p align="center"><img src="assets/banner.svg" alt="oscmidi-bridge" width="100%"></p>
 
 # oscmidi-bridge
 
