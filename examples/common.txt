@@ -5,7 +5,7 @@
 # at yours with the OSCMIDI_CONFIG environment variable.
 
 group   example
-port    Ableton Loopback
+port    Rig Bus
 channel 16
 target  127.0.0.1:11000 -> 11001
 

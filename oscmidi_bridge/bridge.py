@@ -26,7 +26,7 @@ from .verbs import GESTURES
 # that its MIDI host provides permanently. One more port would be one more thing
 # to configure on every key, and one more to lose when the host goes down. The
 # bridge attaches to what is there and filters on the channel.
-DEFAULT_PORT = "Ableton Loopback"
+DEFAULT_PORT = "Rig Bus"
 
 # Addresses AbletonOSC exposes as a `get` but NOT as a subscription. Measured
 # against the installed version, not guessed: each one answered "Unknown OSC
