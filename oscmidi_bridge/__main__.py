@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from .bridge import Bridge
-from .mapping import load
+from .mapping import ANY, load
 from .ports import write_ports
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -59,15 +59,17 @@ def main(argv: list[str]) -> int:
         f"{len(m.watches)} feedbacks · {len(m.texts)} texts · "
         f"{len(m.steps)} steps in {len(phases)} phases · {path_.name}")
     if verify:
+        def num(n):
+            return "  *" if n == ANY else f"{n:>3}"
         for s in m.sends:
-            log(f"  {s.kind} {s.channel:>2} {s.number:>3}  ->  {s.address} {s.args}")
+            log(f"  {s.kind} {s.channel:>2} {num(s.number)}  ->  {s.address} {s.args}")
         for v in m.verbs:
-            log(f"  {v.kind} {v.channel:>2} {v.number:>3}  ~>  {v.name}")
+            log(f"  {v.kind} {v.channel:>2} {num(v.number)}  ~>  {v.name}")
         for w in m.watches:
             log(f"  {w.address}[{w.arg}]  ->  {w.kind} {w.channel} {w.number}")
         for ph in phases:
             fired = [t for t in m.triggers if t.phase == ph]
-            how = (f"on {fired[0].kind} {fired[0].channel} {fired[0].number}" if fired
+            how = (f"on {fired[0].kind} {fired[0].channel} " + ("*" if fired[0].number == ANY else str(fired[0].number)) if fired
                    else "when Live answers" if ph == "boot" else "NEVER FIRED — no trigger")
             log(f"  phase '{ph}' ({how})")
             for st in [x for x in m.steps if x.phase == ph]:

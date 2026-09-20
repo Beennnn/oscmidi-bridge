@@ -45,6 +45,9 @@ rig.
 
 - **commands** — an incoming CC becomes an OSC message, with explicit typing
   (`12` int, `12.0` float, `"x"` string): AbletonOSC refuses a float track index;
+- **program change** — a pedalboard's program number selects directly (`send pc *`,
+  where `$a` is the number that arrived: one line covers all 128), and Live's own
+  values leave as Program Change, which amp modellers and organ modules speak;
 - **gestures** — what a single address cannot express: exclusive solo, next scene,
   toggle playback — computed from the observed state;
 - **feedback** — Live's values go back out as CC, with optional rate limiting
