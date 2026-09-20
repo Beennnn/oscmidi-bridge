@@ -47,3 +47,10 @@ trigger song  cc 51
 # would otherwise resolve silently to the LAST regular track. See patches/.
 # Names with spaces go in double quotes — AbletonOSC matches an output routing by
 # its display name, so "Ext. Out" is written exactly as Live shows it.
+
+# ── Program Change: one line for all 128 songs ──────────────────────────────
+# A pedalboard sends a program number; `*` matches any of them and $a is the one
+# that arrived. Going the other way, Live's scene index leaves as a Program
+# Change, which is what an amp modeller or an organ module understands natively.
+send  pc *  /live/view/set/selected_scene $a
+watch /live/view/get/selected_scene 0  ->  pc 0

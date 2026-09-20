@@ -34,6 +34,16 @@ from typing import Any
 #   $a  the MIDI value after transformation   $v  the raw MIDI value
 
 
+# A number slot written `*` means "any", and the number that arrives becomes the
+# value. It exists for Program Change, where the interesting information IS the
+# program number: one line then covers all 128 of them instead of 128 lines.
+ANY = -1
+
+
+def number(tok: str) -> int:
+    return ANY if tok == "*" else int(tok)
+
+
 def tokenise(line: str) -> list[str]:
     """Split on whitespace, EXCEPT inside double quotes.
 
@@ -249,7 +259,7 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     implicit = words[3].startswith("/") or words[3].startswith("$v")
                     kind = words[1]
                     chan = m.channel if implicit else int(words[2])
-                    num = int(words[2]) if implicit else int(words[3])
+                    num = number(words[2]) if implicit else number(words[3])
                     rest = words[3:] if implicit else words[4:]
                     tr = None
                     if rest and rest[0].startswith("$v"):
@@ -262,7 +272,7 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     from .verbs import GESTURES
                     implicit = len(words) == 4
                     chan_v = m.channel if implicit else int(words[2])
-                    num_v = int(words[2]) if implicit else int(words[3])
+                    num_v = number(words[2]) if implicit else number(words[3])
                     name = words[3] if implicit else words[4]
                     if name not in GESTURES:
                         raise ValueError(f"unknown gesture: {name!r} — known: {', '.join(sorted(GESTURES))}")
@@ -275,7 +285,7 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     impl = len(tail) < 3 or not tail[2].lstrip("-").isdigit()
                     kind = tail[0]
                     chan = m.channel if impl else int(tail[1])
-                    num = int(tail[1]) if impl else int(tail[2])
+                    num = number(tail[1]) if impl else number(tail[2])
                     extras = tail[2:] if impl else tail[3:]
                     tr = None; every = 0
                     for tok in extras:
@@ -299,7 +309,7 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     # trigger <phase> <cc|note> [channel] <number>
                     implicit = len(words) == 4
                     chan_t = m.channel if implicit else int(words[3])
-                    num_t = int(words[3]) if implicit else int(words[4])
+                    num_t = number(words[3]) if implicit else number(words[4])
                     m.triggers.append(Trigger(words[1], words[2], chan_t, num_t, where))
                 case "text":
                     i = words.index("->")

@@ -17,7 +17,7 @@ from pathlib import Path
 import rtmidi
 
 from . import osc
-from .mapping import Mapping
+from .mapping import ANY, Mapping
 from .verbs import GESTURES
 
 # Default MIDI port: the one the controller ALREADY uses.
@@ -153,35 +153,52 @@ class Bridge:
             subs["$a.0"] = float(val)
         return [subs.get(a, a) if isinstance(a, str) else a for a in args]
 
-    def _run_phase(self, phase: str) -> None:
+    def _run_phase(self, phase: str, value: int | None = None) -> None:
+        """Play a phase. `value` is the number that fired it, if any.
+
+        A Program Change fires a phase AND says which one of something: with
+        `trigger song pc *`, $a inside the phase is the program number, so one
+        phase can serve every song instead of one phase per song.
+        """
         steps = [st for st in self.m.steps if st.phase == phase]
         if not steps:
             return
         for st in steps:
-            self._send(st.address, self._resolve(st.args))
+            self._send(st.address, self._resolve(st.args, value))
         self.log(f"phase '{phase}': {len(steps)} messages")
 
     def _on_midi(self, event, _data=None):
         message, _dt = event
-        if len(message) < 3:
+        if len(message) < 2:
             return
-        status, d1, d2 = message[0], message[1], message[2]
-        kind = "cc" if 0xB0 <= status <= 0xBF else "note" if 0x90 <= status <= 0x9F else None
+        status, d1 = message[0], message[1]
+        if 0xC0 <= status <= 0xCF:
+            # Program Change carries TWO bytes: the program number is the whole
+            # message. There is no separate value, so the number is also the
+            # value -- which is exactly what makes `send pc *` useful: one line
+            # covers all 128 programs, and $a is the one that arrived.
+            kind, d2 = "pc", d1
+        elif len(message) < 3:
+            return
+        else:
+            d2 = message[2]
+            kind = "cc" if 0xB0 <= status <= 0xBF else "note" if 0x90 <= status <= 0x9F else None
         if kind is None:
             return
         channel = (status & 0x0F) + 1
         key = (kind, channel, d1)
-        t = self._triggers.get(key)
+        wild = (kind, channel, ANY)
+        t = self._triggers.get(key) or self._triggers.get(wild)
         if t is not None:
-            self._run_phase(t.phase)
+            self._run_phase(t.phase, value=d2)
             return
-        v = self._verbs.get(key)
+        v = self._verbs.get(key) or self._verbs.get(wild)
         if v is not None:
             # A gesture: computes from the observed state, returns several messages.
             for address, args in GESTURES[v.name](self._state_snapshot(), d2):
                 self._send(address, args)
             return
-        s = self._sends.get(key)
+        s = self._sends.get(key) or self._sends.get(wild)
         if s is None:
             return
         val = s.transform(d2) if s.transform else d2
@@ -199,23 +216,30 @@ class Bridge:
                 "scenes": self.state.get("_scenes"), "tracks": self.state.get("_tracks"),
                 "playing": self.state.get("_playing"), "tempo": self.state.get("_tempo")}
 
-    def _emit_cc(self, w, valeur: float):
+    def _emit_cc(self, w, value: float):
         if w.every_ms:
             # Rate limiting: a VU meter sends dozens of messages per second and a
             # controller cannot redraw that fast. Drop the intermediate values
             # rather than flooding the MIDI link.
-            maintenant = time.time() * 1000
-            precedent = self._last_emit.get(id(w), 0)
-            if maintenant - precedent < w.every_ms:
+            now = time.time() * 1000
+            previous = self._last_emit.get(id(w), 0)
+            if now - previous < w.every_ms:
                 return
-            self._last_emit[id(w)] = maintenant
-        v = int(round(valeur))
+            self._last_emit[id(w)] = now
+        v = int(round(value))
         if not 0 <= v <= 127:
             # MIDI is 7-bit: SAY it rather than silently truncating.
-            self.log(f"{w.source}: {w.address} = {valeur} outside 0-127, clamped")
+            self.log(f"{w.source}: {w.address} = {value} outside 0-127, clamped")
             v = max(0, min(127, v))
-        statut = (0xB0 if w.kind == "cc" else 0x90) | (w.channel - 1)
-        self.midi_out.send_message([statut, w.number, v])
+        if w.kind == "pc":
+            # Program Change is two bytes and has no value slot: the number that
+            # travels IS the program. A `watch ... -> pc` therefore sends the
+            # WATCHED VALUE as the program, which is what makes Live's scene
+            # index reach a pedalboard or an amp modeller as a preset change.
+            self.midi_out.send_message([0xC0 | (w.channel - 1), v])
+            return
+        status = (0xB0 if w.kind == "cc" else 0x90) | (w.channel - 1)
+        self.midi_out.send_message([status, w.number, v])
 
     # ── OSC ─────────────────────────────────────────────────────────────────
     def _open_osc(self):
