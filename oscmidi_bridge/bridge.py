@@ -66,6 +66,7 @@ class Bridge:
         # monitoring path that silently reverts is discovered on stage.
         self._live_seen = False
         self._last_reply = 0.0
+        self._tracks_seen = None
         self._triggers = {(t.port, t.kind, t.channel, t.number): t for t in m.triggers}
 
     # ── hot reload ──────────────────────────────────────────────────────────
@@ -294,6 +295,17 @@ class Bridge:
         if not self._live_seen:
             self._live_seen = True
             self._run_phase("boot")
+        # A set that is LOADED rather than a Live that restarted: the process never
+        # went quiet, so the silence check above never fires -- yet the new set
+        # brought its own master routing and levels. The track names are the cheapest
+        # reliable witness, and the bridge already reads them. Renaming a track
+        # replays boot too; boot is idempotent, so that costs nothing.
+        if address == "/live/song/get/track_names" and args:
+            names = tuple(args)
+            if self._tracks_seen is not None and names != self._tracks_seen:
+                self.log("the set changed — replaying the boot phase")
+                self._run_phase("boot")
+            self._tracks_seen = names
         # The current selection is remembered no matter what: it is what makes
         # "the current track" expressible, even if no watch sends it back as MIDI.
         if address == "/live/view/get/selected_track" and args:
