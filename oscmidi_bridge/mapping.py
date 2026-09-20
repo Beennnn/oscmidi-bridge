@@ -22,6 +22,9 @@ comment landed in the wrong place.
 
 from __future__ import annotations
 
+# The one place the fallback port name is defined.
+DEFAULT_PORT = "OSC Bridge"
+
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -212,7 +215,7 @@ class Mapping:
     # Default MIDI port and channel: written once at the top of the file rather
     # than repeated on every line. `python3 -m oscmidi_bridge --ports` writes the
     # ports actually present into the file — uncomment the one you want.
-    port: str = "Rig Bus"
+    port: str = DEFAULT_PORT
     channel: int = 16
     host: str = "127.0.0.1"
     send_port: int = 11000
@@ -270,7 +273,7 @@ def load(path: Path, _seen: set[Path] | None = None) -> Mapping:
                     # a file can switch gear mid-way without repeating either on
                     # every line. Stated once at the top, nothing changes.
                     cur_port = " ".join(words[1:]).strip('"')
-                    if m.port == "Rig Bus" and not seen_port:
+                    if m.port == DEFAULT_PORT and not seen_port:
                         m.port = cur_port      # the first one is also the default
                     seen_port = True
                 case "channel":
